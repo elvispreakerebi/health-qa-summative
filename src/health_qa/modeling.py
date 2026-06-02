@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import inspect
 
 import pandas as pd
 
@@ -140,22 +141,29 @@ def _train_model(
     train_tokenized = train_dataset.map(tokenize_batch, batched=True, remove_columns=train_dataset.column_names)
     val_tokenized = val_dataset.map(tokenize_batch, batched=True, remove_columns=val_dataset.column_names)
 
-    args = Seq2SeqTrainingArguments(
-        output_dir=str(output_dir / "trainer"),
-        learning_rate=float(training_config.get("learning_rate", 5e-5)),
-        num_train_epochs=float(training_config.get("epochs", 3)),
-        per_device_train_batch_size=int(training_config.get("batch_size", 4)),
-        per_device_eval_batch_size=int(training_config.get("batch_size", 4)),
-        gradient_accumulation_steps=int(training_config.get("gradient_accumulation_steps", 4)),
-        predict_with_generate=True,
-        save_strategy="epoch",
-        evaluation_strategy="epoch",
-        logging_strategy="steps",
-        logging_steps=100,
-        seed=int(config.get("seed", 42)),
-        fp16=bool(training_config.get("fp16", True)),
-        report_to=[],
-    )
+    training_args = {
+        "output_dir": str(output_dir / "trainer"),
+        "learning_rate": float(training_config.get("learning_rate", 5e-5)),
+        "num_train_epochs": float(training_config.get("epochs", 3)),
+        "per_device_train_batch_size": int(training_config.get("batch_size", 4)),
+        "per_device_eval_batch_size": int(training_config.get("batch_size", 4)),
+        "gradient_accumulation_steps": int(training_config.get("gradient_accumulation_steps", 4)),
+        "predict_with_generate": True,
+        "save_strategy": "epoch",
+        "logging_strategy": "steps",
+        "logging_steps": 100,
+        "seed": int(config.get("seed", 42)),
+        "fp16": bool(training_config.get("fp16", True)),
+        "report_to": [],
+    }
+    # Transformers has used both names across releases.
+    signature = inspect.signature(Seq2SeqTrainingArguments.__init__)
+    if "eval_strategy" in signature.parameters:
+        training_args["eval_strategy"] = "epoch"
+    else:
+        training_args["evaluation_strategy"] = "epoch"
+
+    args = Seq2SeqTrainingArguments(**training_args)
 
     trainer = Seq2SeqTrainer(
         model=model,
