@@ -87,11 +87,54 @@ def _predict_by_retrieval(
     query_schema: DatasetSchema,
     config: dict[str, Any],
 ) -> pd.DataFrame:
+    group_col = config.get("group_col")
+    if group_col and group_col in bank_df.columns and group_col in query_df.columns:
+        return _predict_grouped_by_retrieval(
+            bank_df,
+            query_df,
+            bank_schema,
+            query_schema,
+            config,
+            group_col=str(group_col),
+        )
+    return _predict_single_bank(bank_df, query_df, bank_schema, query_schema, config)
+
+
+def _predict_grouped_by_retrieval(
+    bank_df: pd.DataFrame,
+    query_df: pd.DataFrame,
+    bank_schema: DatasetSchema,
+    query_schema: DatasetSchema,
+    config: dict[str, Any],
+    *,
+    group_col: str,
+) -> pd.DataFrame:
+    outputs: list[pd.DataFrame] = []
+    fallback_bank = bank_df
+    for group_value, group_queries in query_df.groupby(group_col, sort=False):
+        group_bank = bank_df[bank_df[group_col] == group_value]
+        if group_bank.empty:
+            group_bank = fallback_bank
+        outputs.append(_predict_single_bank(group_bank, group_queries, bank_schema, query_schema, config))
+    if not outputs:
+        return _empty_prediction_frame(query_df, query_schema)
+    return pd.concat(outputs, ignore_index=True)
+
+
+def _predict_single_bank(
+    bank_df: pd.DataFrame,
+    query_df: pd.DataFrame,
+    bank_schema: DatasetSchema,
+    query_schema: DatasetSchema,
+    config: dict[str, Any],
+) -> pd.DataFrame:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
 
     if bank_schema.answer_col is None:
         raise ValueError("Retrieval bank requires answer labels")
+    if query_df.empty:
+        return _empty_prediction_frame(query_df, query_schema)
 
     vectorizer = TfidfVectorizer(
         analyzer=str(config.get("analyzer", "char_wb")),
@@ -133,6 +176,20 @@ def _predict_by_retrieval(
     )
     if query_schema.answer_col:
         output["reference"] = query_df[query_schema.answer_col].to_numpy()
+    return output
+
+
+def _empty_prediction_frame(query_df: pd.DataFrame, query_schema: DatasetSchema) -> pd.DataFrame:
+    output = pd.DataFrame(
+        {
+            "ID": query_df[query_schema.id_col].to_numpy(),
+            "matched_id": [],
+            "similarity": [],
+            "prediction": [],
+        }
+    )
+    if query_schema.answer_col:
+        output["reference"] = []
     return output
 
 

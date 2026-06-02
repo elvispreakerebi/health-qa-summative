@@ -1,2 +1,3 @@
 experiment_id,date,config,change,reason,local_score,public_score,rank,submission_file,insight
 local_retrieval_v1,2026-06-02,configs/local_retrieval.yaml,TF-IDF char n-gram nearest-answer retrieval,Establishes a complete local CPU baseline and valid submission workflow,0.425158,,,outputs/local_retrieval/submission.csv,Full local run completed without GPU; use as reproducible baseline before neural experiments
+local_retrieval_subset_v1,2026-06-02,configs/local_retrieval_subset.yaml,Restrict retrieval candidates to matching subset/language-domain,Test whether language/domain gating improves nearest-answer retrieval,0.417419,,,outputs/local_retrieval_subset/submission.csv,Subset gating reduced validation proxy score; keep global retrieval as current best local baseline
