@@ -8,7 +8,16 @@ from pathlib import Path
 import pandas as pd
 
 QUESTION_CANDIDATES = ("Question", "question", "Input", "input", "Source", "source")
-ANSWER_CANDIDATES = ("Answer", "answer", "Target", "target", "Response", "response")
+ANSWER_CANDIDATES = (
+    "Answer",
+    "answer",
+    "Target",
+    "target",
+    "Response",
+    "response",
+    "Output",
+    "output",
+)
 ID_CANDIDATES = ("ID", "Id", "id")
 LANGUAGE_CANDIDATES = ("Language", "language", "lang", "Lang")
 

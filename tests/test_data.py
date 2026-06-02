@@ -21,6 +21,24 @@ def test_infer_schema_with_common_columns():
     assert schema.language_col == "Language"
 
 
+def test_infer_schema_with_zindi_columns():
+    df = pd.DataFrame(
+        {
+            "ID": ["ID_1"],
+            "input": ["What is malaria?"],
+            "output": ["A mosquito-borne disease."],
+            "subset": ["train"],
+        }
+    )
+
+    schema = infer_schema(df, require_answer=True)
+
+    assert schema.id_col == "ID"
+    assert schema.question_col == "input"
+    assert schema.answer_col == "output"
+    assert schema.language_col is None
+
+
 def test_summarize_frame_returns_core_counts():
     df = pd.DataFrame(
         {
