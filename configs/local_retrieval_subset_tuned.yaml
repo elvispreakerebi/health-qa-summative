@@ -1,0 +1,36 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+retrieval:
+  group_col: subset
+  default:
+    analyzer: char
+    ngram_min: 2
+    ngram_max: 4
+    max_features: 100000
+    min_df: 2
+    max_df: 1.0
+    sublinear_tf: true
+    binary: false
+    use_idf: true
+    smooth_idf: true
+    norm: l2
+    lowercase: true
+    batch_size: 512
+    include_val_for_test: true
+  group_configs:
+    Eng_Gha:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 5
+    Eng_Ken:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 5
+    Eng_Uga:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 5

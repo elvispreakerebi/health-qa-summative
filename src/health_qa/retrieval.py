@@ -97,6 +97,8 @@ def _predict_by_retrieval(
 ) -> pd.DataFrame:
     if "ensemble" in config:
         return _predict_by_ensemble(bank_df, query_df, bank_schema, query_schema, config["ensemble"])
+    if "group_configs" in config:
+        return _predict_with_group_configs(bank_df, query_df, bank_schema, query_schema, config)
     group_col = config.get("group_col")
     if group_col and group_col in bank_df.columns and group_col in query_df.columns:
         return _predict_grouped_by_retrieval(
@@ -108,6 +110,32 @@ def _predict_by_retrieval(
             group_col=str(group_col),
         )
     return _predict_single_bank(bank_df, query_df, bank_schema, query_schema, config)
+
+
+def _predict_with_group_configs(
+    bank_df: pd.DataFrame,
+    query_df: pd.DataFrame,
+    bank_schema: DatasetSchema,
+    query_schema: DatasetSchema,
+    config: dict[str, Any],
+) -> pd.DataFrame:
+    group_col = str(config.get("group_col", "subset"))
+    if group_col not in query_df.columns:
+        raise ValueError(f"group_configs requires query column '{group_col}'")
+
+    default_config = dict(config.get("default", {}))
+    overrides = config.get("group_configs", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("group_configs must be a mapping from group value to retrieval config")
+
+    outputs: list[pd.DataFrame] = []
+    for group_value, group_queries in query_df.groupby(group_col, sort=False):
+        group_config = dict(default_config)
+        group_config.update(overrides.get(group_value, {}))
+        outputs.append(_predict_single_bank(bank_df, group_queries, bank_schema, query_schema, group_config))
+    if not outputs:
+        return _empty_prediction_frame(query_df, query_schema)
+    return pd.concat(outputs, ignore_index=True)
 
 
 def _predict_by_ensemble(

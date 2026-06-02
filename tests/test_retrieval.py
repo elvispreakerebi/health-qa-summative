@@ -218,3 +218,56 @@ retrieval:
     metrics = pd.read_csv(artifacts.metrics_path)
 
     assert metrics.loc[0, "weighted_without_llm"] >= 0
+
+
+def test_retrieval_pipeline_accepts_group_specific_configs(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    pd.DataFrame(
+        {
+            "ID": ["tr1", "tr2"],
+            "input": ["malaria treatment", "water safety"],
+            "output": ["Use malaria medicine.", "Drink safe water."],
+            "subset": ["A", "B"],
+        }
+    ).to_csv(data_dir / "Train.csv", index=False)
+    pd.DataFrame(
+        {
+            "ID": ["va1", "va2"],
+            "input": ["malaria medicine", "safe drinking water"],
+            "output": ["Use malaria medicine.", "Drink safe water."],
+            "subset": ["A", "B"],
+        }
+    ).to_csv(data_dir / "Val.csv", index=False)
+    pd.DataFrame(
+        {"ID": ["te1", "te2"], "input": ["malaria", "water"], "subset": ["A", "B"]}
+    ).to_csv(data_dir / "Test.csv", index=False)
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+data:
+  raw_dir: {data_dir}
+retrieval:
+  group_col: subset
+  default:
+    analyzer: char
+    ngram_min: 2
+    ngram_max: 4
+    max_features: 1000
+    min_df: 1
+    batch_size: 2
+  group_configs:
+    B:
+      analyzer: word
+      ngram_min: 1
+      ngram_max: 1
+""",
+        encoding="utf-8",
+    )
+
+    artifacts = run_retrieval_pipeline(config_path, tmp_path / "outputs")
+    validation = pd.read_csv(artifacts.validation_predictions_path)
+
+    assert len(validation) == 2
+    assert set(validation["ID"]) == {"va1", "va2"}
