@@ -140,7 +140,10 @@ def _predict_single_bank(
         analyzer=str(config.get("analyzer", "char_wb")),
         ngram_range=(int(config.get("ngram_min", 3)), int(config.get("ngram_max", 5))),
         max_features=int(config.get("max_features", 250000)),
+        min_df=int(config.get("min_df", 1)),
+        max_df=float(config.get("max_df", 1.0)),
         lowercase=bool(config.get("lowercase", True)),
+        sublinear_tf=bool(config.get("sublinear_tf", False)),
         strip_accents="unicode",
         preprocessor=_normalize_text,
     )
