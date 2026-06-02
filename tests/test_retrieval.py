@@ -167,3 +167,54 @@ retrieval_ensemble:
 
     assert list(submission.columns) == SUBMISSION_COLUMNS
     assert len(submission) == 1
+
+
+def test_retrieval_pipeline_accepts_extended_tfidf_options(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    pd.DataFrame(
+        {
+            "ID": ["tr1", "tr2"],
+            "input": ["malaria fever medicine", "clean water dehydration"],
+            "output": ["Use malaria medicine.", "Drink safe water."],
+            "subset": ["train", "train"],
+        }
+    ).to_csv(data_dir / "Train.csv", index=False)
+    pd.DataFrame(
+        {
+            "ID": ["va1"],
+            "input": ["malaria medicine"],
+            "output": ["Use malaria medicine."],
+            "subset": ["val"],
+        }
+    ).to_csv(data_dir / "Val.csv", index=False)
+    pd.DataFrame({"ID": ["te1"], "input": ["safe water"], "subset": ["test"]}).to_csv(
+        data_dir / "Test.csv",
+        index=False,
+    )
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+data:
+  raw_dir: {data_dir}
+retrieval:
+  analyzer: char
+  ngram_min: 2
+  ngram_max: 4
+  max_features: 1000
+  min_df: 1
+  sublinear_tf: false
+  binary: true
+  use_idf: false
+  smooth_idf: false
+  norm: l1
+  batch_size: 2
+""",
+        encoding="utf-8",
+    )
+
+    artifacts = run_retrieval_pipeline(config_path, tmp_path / "outputs")
+    metrics = pd.read_csv(artifacts.metrics_path)
+
+    assert metrics.loc[0, "weighted_without_llm"] >= 0

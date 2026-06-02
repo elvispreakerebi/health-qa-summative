@@ -225,6 +225,10 @@ def _predict_single_bank(
         max_df=float(config.get("max_df", 1.0)),
         lowercase=bool(config.get("lowercase", True)),
         sublinear_tf=bool(config.get("sublinear_tf", False)),
+        binary=bool(config.get("binary", False)),
+        use_idf=bool(config.get("use_idf", True)),
+        smooth_idf=bool(config.get("smooth_idf", True)),
+        norm=config.get("norm", "l2"),
         strip_accents="unicode",
         preprocessor=_normalize_text,
     )
