@@ -1,0 +1,21 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+retrieval:
+  analyzer: char
+  ngram_min: 1
+  ngram_max: 3
+  max_features: 100000
+  min_df: 5
+  max_df: 1.0
+  sublinear_tf: true
+  binary: false
+  use_idf: true
+  smooth_idf: true
+  norm: l2
+  lowercase: true
+  batch_size: 512
+  include_val_for_test: true
