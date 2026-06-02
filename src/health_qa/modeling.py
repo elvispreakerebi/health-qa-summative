@@ -165,14 +165,20 @@ def _train_model(
 
     args = Seq2SeqTrainingArguments(**training_args)
 
-    trainer = Seq2SeqTrainer(
-        model=model,
-        args=args,
-        train_dataset=train_tokenized,
-        eval_dataset=val_tokenized,
-        tokenizer=tokenizer,
-        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model),
-    )
+    trainer_kwargs = {
+        "model": model,
+        "args": args,
+        "train_dataset": train_tokenized,
+        "eval_dataset": val_tokenized,
+        "data_collator": DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model),
+    }
+    trainer_signature = inspect.signature(Seq2SeqTrainer.__init__)
+    if "processing_class" in trainer_signature.parameters:
+        trainer_kwargs["processing_class"] = tokenizer
+    elif "tokenizer" in trainer_signature.parameters:
+        trainer_kwargs["tokenizer"] = tokenizer
+
+    trainer = Seq2SeqTrainer(**trainer_kwargs)
     trainer.train()
     trainer.save_model(str(output_dir / "final_model"))
     tokenizer.save_pretrained(str(output_dir / "final_model"))
