@@ -116,8 +116,20 @@ def _train_model(
     max_source_length = int(model_config.get("max_source_length", 256))
     max_target_length = int(model_config.get("max_target_length", 256))
 
+    memory_guard = bool(training_config.get("memory_guard", True))
+    if memory_guard:
+        import torch
+
+        if torch.cuda.is_available():
+            max_source_length = min(max_source_length, int(model_config.get("safe_max_source_length", 192)))
+            max_target_length = min(max_target_length, int(model_config.get("safe_max_target_length", 128)))
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    if memory_guard and hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+    if memory_guard and hasattr(model, "config"):
+        model.config.use_cache = False
 
     train_dataset = Dataset.from_pandas(_to_text2text_frame(train_df, train_schema))
     val_dataset = Dataset.from_pandas(_to_text2text_frame(val_df, val_schema))
@@ -146,7 +158,7 @@ def _train_model(
         "learning_rate": float(training_config.get("learning_rate", 5e-5)),
         "num_train_epochs": float(training_config.get("epochs", 3)),
         "per_device_train_batch_size": int(training_config.get("batch_size", 4)),
-        "per_device_eval_batch_size": int(training_config.get("batch_size", 4)),
+        "per_device_eval_batch_size": int(training_config.get("eval_batch_size", training_config.get("batch_size", 4))),
         "gradient_accumulation_steps": int(training_config.get("gradient_accumulation_steps", 4)),
         "predict_with_generate": True,
         "save_strategy": "epoch",
@@ -156,12 +168,25 @@ def _train_model(
         "fp16": bool(training_config.get("fp16", True)),
         "report_to": [],
     }
+    if memory_guard:
+        training_args["per_device_train_batch_size"] = min(int(training_args["per_device_train_batch_size"]), 1)
+        training_args["per_device_eval_batch_size"] = min(int(training_args["per_device_eval_batch_size"]), 1)
+        training_args["gradient_accumulation_steps"] = max(int(training_args["gradient_accumulation_steps"]), 16)
+        training_args["eval_accumulation_steps"] = int(training_config.get("eval_accumulation_steps", 1))
+        training_args["save_total_limit"] = int(training_config.get("save_total_limit", 1))
     # Transformers has used both names across releases.
     signature = inspect.signature(Seq2SeqTrainingArguments.__init__)
     if "eval_strategy" in signature.parameters:
         training_args["eval_strategy"] = "epoch"
     else:
         training_args["evaluation_strategy"] = "epoch"
+    for optional_arg, value in {
+        "gradient_checkpointing": bool(training_config.get("gradient_checkpointing", memory_guard)),
+        "auto_find_batch_size": bool(training_config.get("auto_find_batch_size", memory_guard)),
+        "torch_empty_cache_steps": int(training_config.get("torch_empty_cache_steps", 50)),
+    }.items():
+        if optional_arg in signature.parameters:
+            training_args[optional_arg] = value
 
     args = Seq2SeqTrainingArguments(**training_args)
 
@@ -206,6 +231,10 @@ def _generate_predictions(
     batch_size = int(inference_config.get("batch_size", 8))
     max_source_length = int(model_config.get("max_source_length", 256))
     max_target_length = int(model_config.get("max_target_length", 256))
+    if torch.cuda.is_available() and bool(config.get("training", {}).get("memory_guard", True)):
+        batch_size = min(batch_size, int(inference_config.get("safe_batch_size", 2)))
+        max_source_length = min(max_source_length, int(model_config.get("safe_max_source_length", 192)))
+        max_target_length = min(max_target_length, int(model_config.get("safe_max_target_length", 128)))
 
     for start in tqdm(range(0, len(prompts), batch_size), desc="Generating"):
         batch_prompts = prompts[start : start + batch_size]
