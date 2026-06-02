@@ -40,6 +40,24 @@ pip install -r requirements.txt
 python -m health_qa.cli inspect-data --data-dir data/raw
 ```
 
+## Colab Workflow
+
+Open `notebooks/health_qa_summative_colab.ipynb` in Colab and run the cells in
+order. The notebook clones this repo, installs dependencies, mounts Google
+Drive, points the config to the shared dataset folder, and runs:
+
+```bash
+python -m health_qa.cli train-generate \
+  --config configs/baseline.yaml \
+  --output-dir outputs/baseline_mt5
+```
+
+The final Zindi file will be saved as:
+
+```text
+outputs/baseline_mt5/submission.csv
+```
+
 ## Submission Format
 
 Zindi requires exactly four columns:
@@ -66,6 +84,8 @@ tests/            Lightweight tests for data and formatting logic
 
 - Set seeds for every experiment.
 - Log every meaningful experiment in `reports/experiment_log.csv`.
+- Let later experiment configs respond to previous results through
+  `health_qa.experiments.suggest_next_config`.
 - Keep submission generation deterministic unless a config explicitly says
   otherwise.
 - Do not use paid APIs, private datasets, AutoML, or non-open-source tooling.

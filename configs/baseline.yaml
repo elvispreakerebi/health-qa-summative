@@ -14,6 +14,7 @@ training:
   batch_size: 4
   gradient_accumulation_steps: 4
 inference:
+  batch_size: 8
   num_beams: 4
   no_repeat_ngram_size: 3
   length_penalty: 1.0

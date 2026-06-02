@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
-from rouge_score import rouge_scorer
 
 
 @dataclass(frozen=True)
@@ -20,6 +19,8 @@ class RougeScores:
 
 
 def score_predictions(references: list[str], predictions: list[str]) -> RougeScores:
+    from rouge_score import rouge_scorer
+
     if len(references) != len(predictions):
         raise ValueError("references and predictions must have the same length")
     scorer = rouge_scorer.RougeScorer(["rouge1", "rougeL"], use_stemmer=False)

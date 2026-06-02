@@ -8,6 +8,7 @@ from pathlib import Path
 
 from health_qa.config import DataConfig, data_config_from_mapping, load_yaml
 from health_qa.data import infer_schema, load_csv, summarize_frame
+from health_qa.modeling import run_training_pipeline
 
 
 def main() -> None:
@@ -18,6 +19,13 @@ def main() -> None:
     inspect_parser.add_argument("--config", default=None, help="Optional YAML config path")
     inspect_parser.add_argument("--data-dir", default=None, help="Override raw data directory")
 
+    train_parser = subparsers.add_parser(
+        "train-generate",
+        help="Fine-tune a seq2seq model and generate a submission",
+    )
+    train_parser.add_argument("--config", required=True, help="YAML experiment config")
+    train_parser.add_argument("--output-dir", required=True, help="Run output directory")
+
     args = parser.parse_args()
     if args.command == "inspect-data":
         config = load_yaml(args.config) if args.config else {"data": {}}
@@ -25,6 +33,11 @@ def main() -> None:
         if args.data_dir:
             data_config = DataConfig(raw_dir=Path(args.data_dir))
         _inspect_data(data_config)
+    elif args.command == "train-generate":
+        artifacts = run_training_pipeline(args.config, args.output_dir)
+        print(f"Submission: {artifacts.submission_path}")
+        print(f"Validation predictions: {artifacts.validation_predictions_path}")
+        print(f"Metrics: {artifacts.metrics_path}")
 
 
 def _inspect_data(config: DataConfig) -> None:

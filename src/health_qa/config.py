@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 
 @dataclass(frozen=True)
 class DataConfig:
@@ -31,6 +29,8 @@ class DataConfig:
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML config file and return a plain dictionary."""
+    import yaml
+
     with Path(path).open("r", encoding="utf-8") as file:
         data = yaml.safe_load(file) or {}
     if not isinstance(data, dict):
