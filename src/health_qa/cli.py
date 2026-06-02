@@ -8,6 +8,7 @@ from pathlib import Path
 
 from health_qa.config import DataConfig, data_config_from_mapping, load_yaml
 from health_qa.data import infer_schema, load_csv, summarize_frame
+from health_qa.experiments import load_experiment_log, suggest_next_config
 from health_qa.modeling import run_training_pipeline
 
 
@@ -26,6 +27,14 @@ def main() -> None:
     train_parser.add_argument("--config", required=True, help="YAML experiment config")
     train_parser.add_argument("--output-dir", required=True, help="Run output directory")
 
+    suggest_parser = subparsers.add_parser(
+        "suggest-next",
+        help="Suggest the next config from previous experiment results",
+    )
+    suggest_parser.add_argument("--base-config", required=True, help="YAML config to mutate")
+    suggest_parser.add_argument("--history", required=True, help="Experiment log CSV")
+    suggest_parser.add_argument("--output", required=True, help="Suggested YAML output path")
+
     args = parser.parse_args()
     if args.command == "inspect-data":
         config = load_yaml(args.config) if args.config else {"data": {}}
@@ -38,6 +47,16 @@ def main() -> None:
         print(f"Submission: {artifacts.submission_path}")
         print(f"Validation predictions: {artifacts.validation_predictions_path}")
         print(f"Metrics: {artifacts.metrics_path}")
+    elif args.command == "suggest-next":
+        import yaml
+
+        base_config = load_yaml(args.base_config)
+        history = load_experiment_log(args.history)
+        suggestion = suggest_next_config(base_config, history)
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(yaml.safe_dump(suggestion, sort_keys=False), encoding="utf-8")
+        print(f"Suggested config: {output}")
 
 
 def _inspect_data(config: DataConfig) -> None:
