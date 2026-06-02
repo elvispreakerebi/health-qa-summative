@@ -75,14 +75,10 @@ def _candidate_configs() -> list[dict[str, Any]]:
         ("char", (2, 3)),
         ("char", (2, 4)),
         ("char", (2, 5)),
-        ("char", (3, 5)),
         ("char_wb", (2, 4)),
-        ("char_wb", (3, 5)),
-        ("word", (1, 1)),
-        ("word", (1, 2)),
     ):
         for max_features, min_df, sublinear_tf, binary, use_idf, norm in product(
-            [50000, 100000, 200000],
+            [100000, 200000],
             [1, 2, 3, 5],
             [False, True],
             [False, True],
