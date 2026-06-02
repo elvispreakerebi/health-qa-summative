@@ -27,7 +27,7 @@ def run_retrieval_pipeline(config_path: str | Path, output_dir: str | Path) -> R
     """Score a local TF-IDF nearest-neighbor QA baseline and write a submission."""
     config = load_yaml(config_path)
     data_config = data_config_from_mapping(config)
-    retrieval_config = config.get("retrieval", {})
+    retrieval_config = _retrieval_config_from_mapping(config)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -80,6 +80,14 @@ def run_retrieval_pipeline(config_path: str | Path, output_dir: str | Path) -> R
     )
 
 
+def _retrieval_config_from_mapping(config: dict[str, Any]) -> dict[str, Any]:
+    retrieval_config = config.get("retrieval", {})
+    ensemble_config = config.get("retrieval_ensemble")
+    if ensemble_config:
+        return {"ensemble": ensemble_config}
+    return retrieval_config
+
+
 def _predict_by_retrieval(
     bank_df: pd.DataFrame,
     query_df: pd.DataFrame,
@@ -87,6 +95,8 @@ def _predict_by_retrieval(
     query_schema: DatasetSchema,
     config: dict[str, Any],
 ) -> pd.DataFrame:
+    if "ensemble" in config:
+        return _predict_by_ensemble(bank_df, query_df, bank_schema, query_schema, config["ensemble"])
     group_col = config.get("group_col")
     if group_col and group_col in bank_df.columns and group_col in query_df.columns:
         return _predict_grouped_by_retrieval(
@@ -98,6 +108,77 @@ def _predict_by_retrieval(
             group_col=str(group_col),
         )
     return _predict_single_bank(bank_df, query_df, bank_schema, query_schema, config)
+
+
+def _predict_by_ensemble(
+    bank_df: pd.DataFrame,
+    query_df: pd.DataFrame,
+    bank_schema: DatasetSchema,
+    query_schema: DatasetSchema,
+    config: dict[str, Any],
+) -> pd.DataFrame:
+    members = config.get("members", [])
+    if not members:
+        raise ValueError("retrieval_ensemble.members must contain at least one member")
+
+    member_outputs: list[pd.DataFrame] = []
+    for member in members:
+        member_config = dict(member)
+        weight = float(member_config.pop("weight", 1.0))
+        output = _predict_by_retrieval(bank_df, query_df, bank_schema, query_schema, member_config)
+        output = output.rename(
+            columns={
+                "matched_id": "member_matched_id",
+                "similarity": "member_similarity",
+                "prediction": "member_prediction",
+            }
+        )
+        output["member_weight"] = weight
+        member_outputs.append(output)
+
+    rows: list[dict[str, object]] = []
+    ids = query_df[query_schema.id_col].reset_index(drop=True)
+    for row_index, query_id in enumerate(ids):
+        candidates: dict[str, dict[str, object]] = {}
+        for output in member_outputs:
+            member_row = output.iloc[row_index]
+            prediction = str(member_row["member_prediction"])
+            similarity = float(member_row["member_similarity"])
+            weight = float(member_row["member_weight"])
+            candidate = candidates.setdefault(
+                prediction,
+                {
+                    "prediction": prediction,
+                    "matched_id": member_row["member_matched_id"],
+                    "vote_weight": 0.0,
+                    "similarity_weight": 0.0,
+                    "best_similarity": 0.0,
+                },
+            )
+            candidate["vote_weight"] = float(candidate["vote_weight"]) + weight
+            candidate["similarity_weight"] = float(candidate["similarity_weight"]) + (similarity * weight)
+            candidate["best_similarity"] = max(float(candidate["best_similarity"]), similarity)
+
+        best = max(
+            candidates.values(),
+            key=lambda item: (
+                float(item["vote_weight"]),
+                float(item["similarity_weight"]),
+                float(item["best_similarity"]),
+            ),
+        )
+        rows.append(
+            {
+                "ID": query_id,
+                "matched_id": best["matched_id"],
+                "similarity": best["best_similarity"],
+                "prediction": best["prediction"],
+            }
+        )
+    output = pd.DataFrame(rows)
+    if query_schema.answer_col:
+        output["reference"] = query_df[query_schema.answer_col].to_numpy()
+    return output
 
 
 def _predict_grouped_by_retrieval(

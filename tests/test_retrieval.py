@@ -110,3 +110,60 @@ retrieval:
     validation = pd.read_csv(artifacts.validation_predictions_path)
 
     assert validation.loc[0, "matched_id"] == "tr_swa"
+
+
+def test_retrieval_pipeline_accepts_ensemble_config(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    rows = {
+        "ID": ["tr1", "tr2"],
+        "input": ["malaria medicine", "dehydration prevention"],
+        "output": ["Use antimalarial medicine.", "Drink oral rehydration solution."],
+        "subset": ["train", "train"],
+    }
+    pd.DataFrame(rows).to_csv(data_dir / "Train.csv", index=False)
+    pd.DataFrame(
+        {
+            "ID": ["va1"],
+            "input": ["malaria treatment"],
+            "output": ["Use antimalarial medicine."],
+            "subset": ["val"],
+        }
+    ).to_csv(data_dir / "Val.csv", index=False)
+    pd.DataFrame({"ID": ["te1"], "input": ["prevent dehydration"], "subset": ["test"]}).to_csv(
+        data_dir / "Test.csv",
+        index=False,
+    )
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+data:
+  raw_dir: {data_dir}
+retrieval_ensemble:
+  members:
+    - analyzer: char
+      ngram_min: 2
+      ngram_max: 4
+      max_features: 1000
+      min_df: 1
+      sublinear_tf: true
+      batch_size: 2
+      weight: 1.0
+    - analyzer: char_wb
+      ngram_min: 3
+      ngram_max: 5
+      max_features: 1000
+      min_df: 1
+      sublinear_tf: false
+      batch_size: 2
+      weight: 0.5
+""",
+        encoding="utf-8",
+    )
+
+    artifacts = run_retrieval_pipeline(config_path, tmp_path / "outputs")
+    submission = pd.read_csv(artifacts.submission_path)
+
+    assert list(submission.columns) == SUBMISSION_COLUMNS
+    assert len(submission) == 1

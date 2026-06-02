@@ -1,0 +1,48 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+retrieval_ensemble:
+  members:
+    - analyzer: char
+      ngram_min: 2
+      ngram_max: 4
+      max_features: 100000
+      min_df: 2
+      sublinear_tf: true
+      lowercase: true
+      batch_size: 512
+      include_val_for_test: true
+      weight: 1.0
+    - analyzer: char
+      ngram_min: 2
+      ngram_max: 4
+      max_features: 100000
+      min_df: 1
+      sublinear_tf: true
+      lowercase: true
+      batch_size: 512
+      include_val_for_test: true
+      weight: 0.9
+    - analyzer: char
+      ngram_min: 2
+      ngram_max: 4
+      max_features: 100000
+      min_df: 1
+      sublinear_tf: false
+      lowercase: true
+      batch_size: 512
+      include_val_for_test: true
+      weight: 0.8
+    - analyzer: char_wb
+      ngram_min: 2
+      ngram_max: 4
+      max_features: 100000
+      min_df: 2
+      sublinear_tf: true
+      lowercase: true
+      batch_size: 512
+      include_val_for_test: true
+      weight: 0.7
