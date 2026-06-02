@@ -1,0 +1,20 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+model:
+  name: google/mt5-base
+  max_source_length: 256
+  max_target_length: 256
+training:
+  learning_rate: 0.00005
+  epochs: 3
+  batch_size: 4
+  gradient_accumulation_steps: 4
+inference:
+  num_beams: 4
+  no_repeat_ngram_size: 3
+  length_penalty: 1.0
+  early_stopping: true

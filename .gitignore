@@ -1,0 +1,25 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Challenge data and generated artifacts
+data/raw/*
+data/processed/*
+submissions/*.csv
+outputs/
+models/
+checkpoints/
+
+# Keep directory placeholders
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!submissions/.gitkeep
