@@ -4,11 +4,13 @@ This repository contains the reproducible pipeline for the Zindi
 Multilingual Health Question Answering in Low-Resource African Languages
 Challenge.
 
-The project is repo-first and Colab-powered:
+The project is local-first and Colab-reproducible:
 
 - reusable code lives in `src/health_qa`;
 - experiment settings live in `configs`;
-- Colab notebooks call the repo code instead of duplicating logic;
+- local CPU-friendly baselines can generate complete submissions;
+- Colab notebooks call the repo code instead of duplicating logic when GPU
+  fine-tuning is needed;
 - generated submissions are written to `submissions`;
 - report assets and leaderboard screenshots are tracked under `reports`.
 
@@ -40,11 +42,44 @@ pip install -r requirements.txt
 python -m health_qa.cli inspect-data --data-dir data/raw
 ```
 
+## Local Submission Workflow
+
+Start with the local retrieval baseline. It runs on CPU, scores against
+`Val.csv`, and creates a valid Zindi submission from `Test.csv`.
+
+```bash
+python -m health_qa.cli retrieve-generate \
+  --config configs/local_retrieval.yaml \
+  --output-dir outputs/local_retrieval
+```
+
+Outputs:
+
+```text
+outputs/local_retrieval/metrics.csv
+outputs/local_retrieval/validation_predictions.csv
+outputs/local_retrieval/submission.csv
+```
+
+This is the default debugging and iteration surface. Use it to validate data,
+submission format, metrics, and experiment tracking before spending Colab time.
+
 ## Colab Workflow
 
 Open `notebooks/health_qa_summative_colab.ipynb` in Colab and run the cells in
 order. The notebook clones this repo, installs dependencies, mounts Google
-Drive, points the config to the shared dataset folder, and runs:
+Drive, points the config to the shared dataset folder, and can run either the
+local retrieval pipeline or neural fine-tuning.
+
+CPU-friendly reproducibility run:
+
+```bash
+python -m health_qa.cli retrieve-generate \
+  --config configs/local_retrieval.yaml \
+  --output-dir outputs/local_retrieval
+```
+
+Optional GPU fine-tuning run:
 
 ```bash
 python -m health_qa.cli train-generate \
@@ -52,10 +87,10 @@ python -m health_qa.cli train-generate \
   --output-dir outputs/baseline_mt5
 ```
 
-The final Zindi file will be saved as:
+The final Zindi file for each run will be saved as:
 
 ```text
-outputs/baseline_mt5/submission.csv
+outputs/<run_name>/submission.csv
 ```
 
 ## Submission Format

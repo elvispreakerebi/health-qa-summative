@@ -10,6 +10,7 @@ from health_qa.config import DataConfig, data_config_from_mapping, load_yaml
 from health_qa.data import infer_schema, load_csv, summarize_frame
 from health_qa.experiments import load_experiment_log, suggest_next_config
 from health_qa.modeling import run_training_pipeline
+from health_qa.retrieval import run_retrieval_pipeline
 
 
 def main() -> None:
@@ -26,6 +27,13 @@ def main() -> None:
     )
     train_parser.add_argument("--config", required=True, help="YAML experiment config")
     train_parser.add_argument("--output-dir", required=True, help="Run output directory")
+
+    retrieval_parser = subparsers.add_parser(
+        "retrieve-generate",
+        help="Run a local TF-IDF retrieval baseline and generate a submission",
+    )
+    retrieval_parser.add_argument("--config", required=True, help="YAML retrieval config")
+    retrieval_parser.add_argument("--output-dir", required=True, help="Run output directory")
 
     suggest_parser = subparsers.add_parser(
         "suggest-next",
@@ -44,6 +52,11 @@ def main() -> None:
         _inspect_data(data_config)
     elif args.command == "train-generate":
         artifacts = run_training_pipeline(args.config, args.output_dir)
+        print(f"Submission: {artifacts.submission_path}")
+        print(f"Validation predictions: {artifacts.validation_predictions_path}")
+        print(f"Metrics: {artifacts.metrics_path}")
+    elif args.command == "retrieve-generate":
+        artifacts = run_retrieval_pipeline(args.config, args.output_dir)
         print(f"Submission: {artifacts.submission_path}")
         print(f"Validation predictions: {artifacts.validation_predictions_path}")
         print(f"Metrics: {artifacts.metrics_path}")

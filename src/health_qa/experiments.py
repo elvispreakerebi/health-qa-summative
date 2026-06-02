@@ -42,7 +42,7 @@ def suggest_next_config(base_config: dict[str, Any], history: pd.DataFrame) -> d
     scored["local_score"] = scored["local_score"].astype(float)
     best = scored.sort_values("local_score", ascending=False).iloc[0]
     recent = scored.tail(3)
-    plateaued = recent["local_score"].max() - recent["local_score"].min() < 0.005
+    plateaued = len(recent) >= 3 and recent["local_score"].max() - recent["local_score"].min() < 0.005
 
     inference = config.setdefault("inference", {})
     training = config.setdefault("training", {})

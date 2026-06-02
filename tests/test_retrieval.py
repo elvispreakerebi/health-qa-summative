@@ -1,0 +1,62 @@
+from pathlib import Path
+
+import pandas as pd
+
+from health_qa.retrieval import run_retrieval_pipeline
+from health_qa.submission import SUBMISSION_COLUMNS
+
+
+def test_retrieval_pipeline_writes_metrics_and_submission(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    pd.DataFrame(
+        {
+            "ID": ["tr1", "tr2"],
+            "input": ["What treats malaria?", "How do I prevent dehydration?"],
+            "output": ["Use antimalarial medicine from a health worker.", "Drink oral rehydration solution."],
+            "subset": ["train", "train"],
+        }
+    ).to_csv(data_dir / "Train.csv", index=False)
+    pd.DataFrame(
+        {
+            "ID": ["va1"],
+            "input": ["What medicine treats malaria?"],
+            "output": ["Use antimalarial medicine from a health worker."],
+            "subset": ["val"],
+        }
+    ).to_csv(data_dir / "Val.csv", index=False)
+    pd.DataFrame(
+        {
+            "ID": ["te1"],
+            "input": ["How can dehydration be prevented?"],
+            "subset": ["test"],
+        }
+    ).to_csv(data_dir / "Test.csv", index=False)
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+data:
+  raw_dir: {data_dir}
+retrieval:
+  analyzer: char_wb
+  ngram_min: 3
+  ngram_max: 5
+  max_features: 1000
+  batch_size: 2
+  include_val_for_test: true
+""",
+        encoding="utf-8",
+    )
+
+    artifacts = run_retrieval_pipeline(config_path, tmp_path / "outputs")
+
+    metrics = pd.read_csv(artifacts.metrics_path)
+    submission = pd.read_csv(artifacts.submission_path)
+    validation = pd.read_csv(artifacts.validation_predictions_path)
+
+    assert set(metrics.columns) == {"rouge1_f1", "rouge_l_f1", "weighted_without_llm"}
+    assert list(submission.columns) == SUBMISSION_COLUMNS
+    assert len(submission) == 1
+    assert len(validation) == 1
+    assert validation.loc[0, "matched_id"] == "tr1"
