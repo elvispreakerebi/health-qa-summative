@@ -225,6 +225,9 @@ def _train_model(
         "torch_empty_cache_steps": int(training_config.get("torch_empty_cache_steps", 50)),
         "use_cpu": bool(training_config.get("use_cpu", False)),
         "dataloader_pin_memory": bool(training_config.get("dataloader_pin_memory", False)),
+        "load_best_model_at_end": bool(training_config.get("load_best_model_at_end", False)),
+        "metric_for_best_model": training_config.get("metric_for_best_model", "eval_loss"),
+        "greater_is_better": bool(training_config.get("greater_is_better", False)),
     }.items():
         if optional_arg in signature.parameters:
             training_args[optional_arg] = value
