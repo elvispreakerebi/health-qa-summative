@@ -15,3 +15,4 @@ accelerate>=0.30.0
 peft>=0.11.0
 bitsandbytes>=0.43.0; platform_system != "Darwin"
 sentencepiece>=0.2.0
+protobuf>=4.25.0

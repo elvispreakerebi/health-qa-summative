@@ -24,9 +24,18 @@ class RunArtifacts:
     metrics_path: Path
 
 
-def build_prompt(row: pd.Series, schema: DatasetSchema) -> str:
+def build_prompt(
+    row: pd.Series,
+    schema: DatasetSchema,
+    prompt_config: dict[str, Any] | None = None,
+) -> str:
     """Format one row as a multilingual QA instruction."""
+    prompt_config = prompt_config or {}
     question = str(row[schema.question_col]).strip()
+    subset = str(row["subset"]).strip() if "subset" in row else ""
+    template = prompt_config.get("template")
+    if template:
+        return str(template).format(question=question, subset=subset)
     if schema.language_col:
         language = str(row[schema.language_col]).strip()
         return f"Answer this health question in {language}: {question}"
@@ -46,6 +55,9 @@ def run_training_pipeline(config_path: str | Path, output_dir: str | Path) -> Ru
     train_df = load_csv(data_config.train_path)
     val_df = load_csv(data_config.val_path)
     test_df = load_csv(data_config.test_path)
+    train_df = _filter_frame(train_df, config.get("data", {}), split="train", seed=seed)
+    val_df = _filter_frame(val_df, config.get("data", {}), split="val", seed=seed)
+    test_df = _filter_frame(test_df, config.get("data", {}), split="test", seed=seed)
 
     train_schema = infer_schema(train_df, require_answer=True)
     val_schema = infer_schema(val_df, require_answer=True)
@@ -124,15 +136,19 @@ def _train_model(
             max_source_length = min(max_source_length, int(model_config.get("safe_max_source_length", 192)))
             max_target_length = min(max_target_length, int(model_config.get("safe_max_target_length", 128)))
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        use_fast=bool(model_config.get("tokenizer_use_fast", True)),
+    )
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     if memory_guard and hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
     if memory_guard and hasattr(model, "config"):
         model.config.use_cache = False
 
-    train_dataset = Dataset.from_pandas(_to_text2text_frame(train_df, train_schema))
-    val_dataset = Dataset.from_pandas(_to_text2text_frame(val_df, val_schema))
+    prompt_config = model_config.get("prompt")
+    train_dataset = Dataset.from_pandas(_to_text2text_frame(train_df, train_schema, prompt_config))
+    val_dataset = Dataset.from_pandas(_to_text2text_frame(val_df, val_schema, prompt_config))
 
     def tokenize_batch(batch):
         tokenized = tokenizer(
@@ -226,7 +242,7 @@ def _generate_predictions(
     model.to(device)
     model.eval()
 
-    prompts = [build_prompt(row, schema) for _, row in df.iterrows()]
+    prompts = [build_prompt(row, schema, model_config.get("prompt")) for _, row in df.iterrows()]
     predictions: list[str] = []
     batch_size = int(inference_config.get("batch_size", 8))
     max_source_length = int(model_config.get("max_source_length", 256))
@@ -258,12 +274,36 @@ def _generate_predictions(
     return [prediction.strip() for prediction in predictions]
 
 
-def _to_text2text_frame(df: pd.DataFrame, schema: DatasetSchema) -> pd.DataFrame:
+def _to_text2text_frame(
+    df: pd.DataFrame,
+    schema: DatasetSchema,
+    prompt_config: dict[str, Any] | None = None,
+) -> pd.DataFrame:
     if schema.answer_col is None:
         raise ValueError("Training data requires an answer column")
     return pd.DataFrame(
         {
-            "source_text": [build_prompt(row, schema) for _, row in df.iterrows()],
+            "source_text": [
+                build_prompt(row, schema, prompt_config)
+                for _, row in df.iterrows()
+            ],
             "target_text": df[schema.answer_col].fillna("").astype(str),
         }
     )
+
+
+def _filter_frame(
+    df: pd.DataFrame,
+    data_config: dict[str, Any],
+    *,
+    split: str,
+    seed: int,
+) -> pd.DataFrame:
+    output = df.copy()
+    subsets = data_config.get(f"{split}_subsets")
+    if subsets:
+        output = output[output["subset"].isin(subsets)].copy()
+    max_rows = data_config.get(f"max_{split}_rows")
+    if max_rows:
+        output = output.sample(n=min(int(max_rows), len(output)), random_state=seed)
+    return output.sort_index().reset_index(drop=True)
