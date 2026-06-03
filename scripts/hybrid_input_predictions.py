@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import operator
 from pathlib import Path
 
 import pandas as pd
@@ -75,7 +76,7 @@ def _hybrid_predictions(
     id_col: str,
     question_col: str,
     prediction_path: Path,
-    rules: dict[str, tuple[str, int | None]],
+    rules: dict[str, HybridRule],
     *,
     submission_mode: bool = False,
 ) -> pd.DataFrame:
@@ -101,8 +102,10 @@ def _hybrid_predictions(
         if rule is None:
             outputs.append(str(prediction).strip())
             continue
-        mode, max_words = rule
-        outputs.append(_trim_words(_combine(str(question), str(prediction), mode), max_words))
+        if not rule.applies(str(question), str(prediction)):
+            outputs.append(str(prediction).strip())
+            continue
+        outputs.append(_trim_words(_combine(str(question), str(prediction), rule.mode), rule.max_words))
     return pd.DataFrame({"ID": merged[id_col], "prediction": outputs})
 
 
@@ -124,12 +127,56 @@ def _trim_words(text: str, max_words: int | None) -> str:
     return " ".join(text.strip().split()[:max_words])
 
 
-def _parse_rules(raw: str) -> dict[str, tuple[str, int | None]]:
-    rules: dict[str, tuple[str, int | None]] = {}
+class HybridRule:
+    def __init__(self, mode: str, max_words: int | None, condition: str | None = None) -> None:
+        self.mode = mode
+        self.max_words = max_words
+        self.condition = _parse_condition(condition)
+
+    def applies(self, question: str, prediction: str) -> bool:
+        if self.condition is None:
+            return True
+        feature, compare, threshold = self.condition
+        value = {
+            "input_words": len(question.split()),
+            "pred_words": len(prediction.split()),
+        }[feature]
+        return compare(value, threshold)
+
+
+def _parse_rules(raw: str) -> dict[str, HybridRule]:
+    rules: dict[str, HybridRule] = {}
     for item in raw.split(","):
-        subset, mode, max_words = item.split(":", maxsplit=2)
-        rules[subset.strip()] = (mode.strip(), None if max_words.strip() == "none" else int(max_words))
+        parts = item.split(":")
+        if len(parts) not in (3, 4):
+            raise ValueError("Each rule must be subset:mode:max_words[:condition]")
+        subset, mode, max_words = parts[:3]
+        condition = parts[3] if len(parts) == 4 else None
+        rules[subset.strip()] = HybridRule(
+            mode.strip(),
+            None if max_words.strip() == "none" else int(max_words),
+            condition,
+        )
     return rules
+
+
+def _parse_condition(raw: str | None):
+    if not raw:
+        return None
+    operators = {
+        "<=": operator.le,
+        ">=": operator.ge,
+        "<": operator.lt,
+        ">": operator.gt,
+    }
+    for symbol, compare in operators.items():
+        if symbol in raw:
+            feature, threshold = raw.split(symbol, maxsplit=1)
+            feature = feature.strip()
+            if feature not in {"input_words", "pred_words"}:
+                raise ValueError(f"Unsupported condition feature: {feature}")
+            return feature, compare, float(threshold)
+    raise ValueError(f"Unsupported condition: {raw}")
 
 
 if __name__ == "__main__":
