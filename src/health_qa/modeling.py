@@ -145,6 +145,21 @@ def _train_model(
         model.gradient_checkpointing_enable()
     if memory_guard and hasattr(model, "config"):
         model.config.use_cache = False
+    lora_config = training_config.get("lora")
+    if lora_config and bool(lora_config.get("enabled", False)):
+        from peft import LoraConfig, TaskType, get_peft_model
+
+        model = get_peft_model(
+            model,
+            LoraConfig(
+                task_type=TaskType.SEQ_2_SEQ_LM,
+                r=int(lora_config.get("r", 8)),
+                lora_alpha=int(lora_config.get("alpha", 16)),
+                lora_dropout=float(lora_config.get("dropout", 0.05)),
+                target_modules=list(lora_config.get("target_modules", ["q", "v"])),
+            ),
+        )
+        model.print_trainable_parameters()
 
     prompt_config = model_config.get("prompt")
     train_dataset = Dataset.from_pandas(_to_text2text_frame(train_df, train_schema, prompt_config))
@@ -208,6 +223,8 @@ def _train_model(
         "gradient_checkpointing": bool(training_config.get("gradient_checkpointing", memory_guard)),
         "auto_find_batch_size": bool(training_config.get("auto_find_batch_size", memory_guard)),
         "torch_empty_cache_steps": int(training_config.get("torch_empty_cache_steps", 50)),
+        "use_cpu": bool(training_config.get("use_cpu", False)),
+        "dataloader_pin_memory": bool(training_config.get("dataloader_pin_memory", False)),
     }.items():
         if optional_arg in signature.parameters:
             training_args[optional_arg] = value

@@ -1,0 +1,51 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+  train_subsets:
+    - Aka_Gha
+    - Amh_Eth
+    - Eng_Gha
+  val_subsets:
+    - Aka_Gha
+    - Amh_Eth
+    - Eng_Gha
+model:
+  name: castorini/afriteva_v2_base
+  tokenizer_use_fast: false
+  max_source_length: 160
+  max_target_length: 128
+  safe_max_source_length: 160
+  safe_max_target_length: 128
+  prompt:
+    template: "health qa subset: {subset}\nquestion: {question}\nanswer:"
+training:
+  learning_rate: 0.0002
+  epochs: 3
+  batch_size: 1
+  eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: true
+  auto_find_batch_size: true
+  memory_guard: true
+  fp16: false
+  save_total_limit: 1
+  eval_accumulation_steps: 1
+  dataloader_pin_memory: false
+  lora:
+    enabled: true
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules:
+      - q
+      - v
+inference:
+  batch_size: 4
+  safe_batch_size: 2
+  num_beams: 4
+  no_repeat_ngram_size: 3
+  length_penalty: 1.0
+  early_stopping: true
