@@ -98,13 +98,19 @@ def _predict_with_rerank(
     cache_dir.mkdir(parents=True, exist_ok=True)
     bank_embeddings = _load_or_encode(
         model,
-        bank_df[bank_schema.question_col].fillna("").astype(str).tolist(),
+        _prefix_texts(
+            bank_df[bank_schema.question_col].fillna("").astype(str).tolist(),
+            str(rerank_config.get("bank_prefix", "")),
+        ),
         cache_dir / "bank_embeddings.npy",
         batch_size=int(rerank_config.get("encode_batch_size", 128)),
     )
     query_embeddings = _load_or_encode(
         model,
-        query_df[query_schema.question_col].fillna("").astype(str).tolist(),
+        _prefix_texts(
+            query_df[query_schema.question_col].fillna("").astype(str).tolist(),
+            str(rerank_config.get("query_prefix", "")),
+        ),
         cache_dir / "query_embeddings.npy",
         batch_size=int(rerank_config.get("encode_batch_size", 128)),
     )
@@ -211,6 +217,12 @@ def _load_or_encode(model, texts: list[str], path: Path, *, batch_size: int) -> 
     )
     np.save(path, embeddings)
     return embeddings
+
+
+def _prefix_texts(texts: list[str], prefix: str) -> list[str]:
+    if not prefix:
+        return texts
+    return [f"{prefix}{text}" for text in texts]
 
 
 if __name__ == "__main__":
