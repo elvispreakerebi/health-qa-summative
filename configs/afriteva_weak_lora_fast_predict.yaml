@@ -8,6 +8,10 @@ data:
     - Aka_Gha
     - Amh_Eth
     - Eng_Gha
+  test_subsets:
+    - Aka_Gha
+    - Amh_Eth
+    - Eng_Gha
 model:
   name: castorini/afriteva_v2_base
   tokenizer_use_fast: false
@@ -16,7 +20,7 @@ model:
   prompt:
     template: "health qa subset: {subset}\nquestion: {question}\nanswer:"
 inference:
-  batch_size: 4
+  batch_size: 8
   max_new_tokens: 96
   num_beams: 1
   no_repeat_ngram_size: 3
