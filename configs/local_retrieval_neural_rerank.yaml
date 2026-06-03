@@ -1,0 +1,59 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+semantic_rerank:
+  model_name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  top_k: 10
+  semantic_weight: 0.3
+  encode_batch_size: 128
+  tfidf_batch_size: 256
+  local_files_only: true
+retrieval:
+  group_col: subset
+  default:
+    analyzer: char
+    ngram_min: 2
+    ngram_max: 4
+    max_features: 100000
+    min_df: 2
+    max_df: 1.0
+    sublinear_tf: true
+    binary: false
+    use_idf: true
+    smooth_idf: true
+    norm: l2
+    lowercase: true
+  group_configs:
+    Aka_Gha:
+      ngram_min: 1
+      ngram_max: 4
+      min_df: 5
+    Amh_Eth:
+      analyzer: char_wb
+      ngram_min: 3
+      ngram_max: 5
+      min_df: 1
+      sublinear_tf: false
+    Eng_Eth:
+      ngram_min: 2
+      ngram_max: 5
+      min_df: 2
+    Eng_Gha:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 5
+    Eng_Ken:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 2
+    Eng_Uga:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 2
+    Lug_Uga:
+      ngram_min: 1
+      ngram_max: 4
+      min_df: 5
