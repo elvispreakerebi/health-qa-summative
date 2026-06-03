@@ -12,7 +12,7 @@ semantic_rerank:
     Aka_Gha: 0.5
     Amh_Eth: 0.2
     Eng_Eth: 0.4
-    Eng_Gha: 0.6
+    Eng_Gha: 0.5
     Eng_Ken: 1.0
     Eng_Uga: 1.0
     Lug_Uga: 0.1
@@ -22,6 +22,11 @@ semantic_rerank:
   local_files_only: true
 retrieval:
   group_col: subset
+  candidate_scope: all
+  candidate_scope_by_group:
+    Aka_Gha: same_group
+    Amh_Eth: same_group
+    Eng_Gha: same_group
   default:
     analyzer: char
     ngram_min: 2

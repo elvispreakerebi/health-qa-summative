@@ -114,27 +114,40 @@ def _predict_with_rerank(
     semantic_weights_by_group = rerank_config.get("semantic_weights_by_group", {})
     predictions_by_position: dict[int, dict[str, object]] = {}
     group_col = str(config["retrieval"].get("group_col", "subset"))
-    default_config = dict(config["retrieval"]["default"])
+    retrieval_config = config["retrieval"]
+    default_config = dict(retrieval_config["default"])
     group_configs = config["retrieval"].get("group_configs", {})
+    default_candidate_scope = str(retrieval_config.get("candidate_scope", "all"))
+    candidate_scope_by_group = retrieval_config.get("candidate_scope_by_group", {})
 
     for group_value, group_queries in query_df.groupby(group_col, sort=False):
         vectorizer_config = dict(default_config)
         vectorizer_config.update(group_configs.get(group_value, {}))
         semantic_weight = float(semantic_weights_by_group.get(group_value, default_semantic_weight))
+        candidate_scope = str(candidate_scope_by_group.get(group_value, default_candidate_scope))
+        candidate_bank = _candidate_bank(bank_df, group_col, group_value, candidate_scope)
+        candidate_positions = candidate_bank.index.to_numpy()
         group_positions = group_queries.index.to_numpy()
-        bank_matrix, query_matrix = _vectorize(bank_df, group_queries, bank_schema, query_schema, vectorizer_config)
+        bank_matrix, query_matrix = _vectorize(
+            candidate_bank,
+            group_queries,
+            bank_schema,
+            query_schema,
+            vectorizer_config,
+        )
 
         for start in range(0, query_matrix.shape[0], int(rerank_config.get("tfidf_batch_size", 256))):
             scores = cosine_similarity(query_matrix[start : start + int(rerank_config.get("tfidf_batch_size", 256))], bank_matrix)
-            candidate_positions = np.argpartition(
+            local_candidate_positions = np.argpartition(
                 -scores,
                 kth=min(top_k - 1, scores.shape[1] - 1),
                 axis=1,
             )[:, :top_k]
-            for row_offset, candidates in enumerate(candidate_positions):
+            for row_offset, local_candidates in enumerate(local_candidate_positions):
                 query_position = int(group_positions[start + row_offset])
-                candidates = candidates[np.argsort(-scores[row_offset, candidates])]
-                tfidf_scores = scores[row_offset, candidates]
+                local_candidates = local_candidates[np.argsort(-scores[row_offset, local_candidates])]
+                tfidf_scores = scores[row_offset, local_candidates]
+                candidates = candidate_positions[local_candidates]
                 semantic_scores = bank_embeddings[candidates] @ query_embeddings[query_position]
                 combined_scores = (1 - semantic_weight) * tfidf_scores + semantic_weight * semantic_scores
                 best_position = int(candidates[int(combined_scores.argmax())])
@@ -150,6 +163,14 @@ def _predict_with_rerank(
     if query_schema.answer_col:
         output["reference"] = query_df[query_schema.answer_col].to_numpy()
     return output
+
+
+def _candidate_bank(bank_df: pd.DataFrame, group_col: str, group_value: object, candidate_scope: str) -> pd.DataFrame:
+    if candidate_scope == "all":
+        return bank_df
+    if candidate_scope == "same_group":
+        return bank_df[bank_df[group_col] == group_value]
+    raise ValueError(f"Unsupported candidate_scope: {candidate_scope}")
 
 
 def _vectorize(
