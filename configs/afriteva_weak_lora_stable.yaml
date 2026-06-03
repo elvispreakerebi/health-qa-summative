@@ -27,7 +27,8 @@ training:
   batch_size: 1
   eval_batch_size: 1
   gradient_accumulation_steps: 16
-  gradient_checkpointing: true
+  gradient_checkpointing: false
+  model_gradient_checkpointing: false
   auto_find_batch_size: true
   memory_guard: true
   fp16: false

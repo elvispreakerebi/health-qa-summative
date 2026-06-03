@@ -141,9 +141,12 @@ def _train_model(
         use_fast=bool(model_config.get("tokenizer_use_fast", True)),
     )
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    if memory_guard and hasattr(model, "gradient_checkpointing_enable"):
+    enable_gradient_checkpointing = bool(
+        training_config.get("model_gradient_checkpointing", training_config.get("gradient_checkpointing", memory_guard))
+    )
+    if enable_gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
-    if memory_guard and hasattr(model, "config"):
+    if enable_gradient_checkpointing and hasattr(model, "config"):
         model.config.use_cache = False
     lora_config = training_config.get("lora")
     if lora_config and bool(lora_config.get("enabled", False)):
@@ -211,7 +214,9 @@ def _train_model(
         training_args["per_device_train_batch_size"] = min(int(training_args["per_device_train_batch_size"]), 1)
         training_args["per_device_eval_batch_size"] = min(int(training_args["per_device_eval_batch_size"]), 1)
         training_args["gradient_accumulation_steps"] = max(int(training_args["gradient_accumulation_steps"]), 16)
+    if "eval_accumulation_steps" in training_config:
         training_args["eval_accumulation_steps"] = int(training_config.get("eval_accumulation_steps", 1))
+    if "save_total_limit" in training_config:
         training_args["save_total_limit"] = int(training_config.get("save_total_limit", 1))
     # Transformers has used both names across releases.
     signature = inspect.signature(Seq2SeqTrainingArguments.__init__)
@@ -220,7 +225,7 @@ def _train_model(
     else:
         training_args["evaluation_strategy"] = "epoch"
     for optional_arg, value in {
-        "gradient_checkpointing": bool(training_config.get("gradient_checkpointing", memory_guard)),
+        "gradient_checkpointing": enable_gradient_checkpointing,
         "auto_find_batch_size": bool(training_config.get("auto_find_batch_size", memory_guard)),
         "torch_empty_cache_steps": int(training_config.get("torch_empty_cache_steps", 50)),
         "use_cpu": bool(training_config.get("use_cpu", False)),
