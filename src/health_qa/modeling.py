@@ -67,6 +67,44 @@ def run_training_pipeline(config_path: str | Path, output_dir: str | Path) -> Ru
     val_predictions = _generate_predictions(config, trainer.model, tokenizer, val_df, val_schema)
     test_predictions = _generate_predictions(config, trainer.model, tokenizer, test_df, test_schema)
 
+    return _score_and_save_outputs(output_path, val_df, test_df, val_schema, test_schema, val_predictions, test_predictions)
+
+
+def run_prediction_pipeline(
+    config_path: str | Path,
+    output_dir: str | Path,
+    model_dir: str | Path,
+) -> RunArtifacts:
+    """Load a saved seq2seq model/adapter, score validation predictions, and save a test submission."""
+    config = load_yaml(config_path)
+    seed = int(config.get("seed", 42))
+    set_seed(seed)
+
+    data_config = data_config_from_mapping(config)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    val_df = _filter_frame(load_csv(data_config.val_path), config.get("data", {}), split="val", seed=seed)
+    test_df = _filter_frame(load_csv(data_config.test_path), config.get("data", {}), split="test", seed=seed)
+    val_schema = infer_schema(val_df, require_answer=True)
+    test_schema = infer_schema(test_df, require_answer=False)
+
+    model, tokenizer = _load_saved_model(config, Path(model_dir))
+    val_predictions = _generate_predictions(config, model, tokenizer, val_df, val_schema)
+    test_predictions = _generate_predictions(config, model, tokenizer, test_df, test_schema)
+
+    return _score_and_save_outputs(output_path, val_df, test_df, val_schema, test_schema, val_predictions, test_predictions)
+
+
+def _score_and_save_outputs(
+    output_path: Path,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    val_schema: DatasetSchema,
+    test_schema: DatasetSchema,
+    val_predictions: list[str],
+    test_predictions: list[str],
+) -> RunArtifacts:
     metrics = score_predictions(
         references=val_df[val_schema.answer_col].fillna("").astype(str).tolist(),  # type: ignore[index]
         predictions=val_predictions,
@@ -103,6 +141,23 @@ def run_training_pipeline(config_path: str | Path, output_dir: str | Path) -> Ru
         validation_predictions_path=validation_predictions_path,
         metrics_path=metrics_path,
     )
+
+
+def _load_saved_model(config: dict[str, Any], model_dir: Path):
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+    model_config = config.get("model", {})
+    model_name = model_config.get("name", "google/mt5-base")
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_dir,
+        use_fast=bool(model_config.get("tokenizer_use_fast", True)),
+    )
+    if (model_dir / "adapter_config.json").exists():
+        from peft import PeftModel
+
+        base_model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        return PeftModel.from_pretrained(base_model, model_dir), tokenizer
+    return AutoModelForSeq2SeqLM.from_pretrained(model_dir), tokenizer
 
 
 def _train_model(
@@ -279,7 +334,7 @@ def _generate_predictions(
     predictions: list[str] = []
     batch_size = int(inference_config.get("batch_size", 8))
     max_source_length = int(model_config.get("max_source_length", 256))
-    max_target_length = int(model_config.get("max_target_length", 256))
+    max_target_length = int(inference_config.get("max_new_tokens", model_config.get("max_target_length", 256)))
     if torch.cuda.is_available() and bool(config.get("training", {}).get("memory_guard", True)):
         batch_size = min(batch_size, int(inference_config.get("safe_batch_size", 2)))
         max_source_length = min(max_source_length, int(model_config.get("safe_max_source_length", 192)))

@@ -1,0 +1,24 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+  val_subsets:
+    - Aka_Gha
+    - Amh_Eth
+    - Eng_Gha
+model:
+  name: castorini/afriteva_v2_base
+  tokenizer_use_fast: false
+  max_source_length: 160
+  max_target_length: 128
+  prompt:
+    template: "health qa subset: {subset}\nquestion: {question}\nanswer:"
+inference:
+  batch_size: 4
+  max_new_tokens: 96
+  num_beams: 1
+  no_repeat_ngram_size: 3
+  length_penalty: 1.0
+  early_stopping: true
