@@ -233,10 +233,10 @@ def test_retrieval_pipeline_accepts_group_specific_configs(tmp_path: Path):
     ).to_csv(data_dir / "Train.csv", index=False)
     pd.DataFrame(
         {
-            "ID": ["va1", "va2"],
-            "input": ["malaria medicine", "safe drinking water"],
-            "output": ["Use malaria medicine.", "Drink safe water."],
-            "subset": ["A", "B"],
+            "ID": ["va_b", "va_a"],
+            "input": ["safe drinking water", "malaria medicine"],
+            "output": ["Drink safe water.", "Use malaria medicine."],
+            "subset": ["B", "A"],
         }
     ).to_csv(data_dir / "Val.csv", index=False)
     pd.DataFrame(
@@ -270,4 +270,4 @@ retrieval:
     validation = pd.read_csv(artifacts.validation_predictions_path)
 
     assert len(validation) == 2
-    assert set(validation["ID"]) == {"va1", "va2"}
+    assert validation["ID"].tolist() == ["va_b", "va_a"]

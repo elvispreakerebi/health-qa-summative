@@ -132,10 +132,12 @@ def _predict_with_group_configs(
     for group_value, group_queries in query_df.groupby(group_col, sort=False):
         group_config = dict(default_config)
         group_config.update(overrides.get(group_value, {}))
-        outputs.append(_predict_single_bank(bank_df, group_queries, bank_schema, query_schema, group_config))
+        group_output = _predict_single_bank(bank_df, group_queries, bank_schema, query_schema, group_config)
+        group_output.index = group_queries.index
+        outputs.append(group_output)
     if not outputs:
         return _empty_prediction_frame(query_df, query_schema)
-    return pd.concat(outputs, ignore_index=True)
+    return pd.concat(outputs).sort_index().reset_index(drop=True)
 
 
 def _predict_by_ensemble(
@@ -224,10 +226,12 @@ def _predict_grouped_by_retrieval(
         group_bank = bank_df[bank_df[group_col] == group_value]
         if group_bank.empty:
             group_bank = fallback_bank
-        outputs.append(_predict_single_bank(group_bank, group_queries, bank_schema, query_schema, config))
+        group_output = _predict_single_bank(group_bank, group_queries, bank_schema, query_schema, config)
+        group_output.index = group_queries.index
+        outputs.append(group_output)
     if not outputs:
         return _empty_prediction_frame(query_df, query_schema)
-    return pd.concat(outputs, ignore_index=True)
+    return pd.concat(outputs).sort_index().reset_index(drop=True)
 
 
 def _predict_single_bank(
