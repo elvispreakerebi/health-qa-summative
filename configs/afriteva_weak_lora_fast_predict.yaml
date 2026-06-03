@@ -20,9 +20,8 @@ model:
   prompt:
     template: "health qa subset: {subset}\nquestion: {question}\nanswer:"
 inference:
-  batch_size: 8
+  batch_size: 4
   max_new_tokens: 96
   num_beams: 1
   no_repeat_ngram_size: 3
   length_penalty: 1.0
-  early_stopping: true
