@@ -169,6 +169,14 @@ def _train_model(
     train_tokenized = train_dataset.map(tokenize_batch, batched=True, remove_columns=train_dataset.column_names)
     val_tokenized = val_dataset.map(tokenize_batch, batched=True, remove_columns=val_dataset.column_names)
 
+    cuda_available = False
+    try:
+        import torch
+
+        cuda_available = torch.cuda.is_available()
+    except ImportError:
+        cuda_available = False
+
     training_args = {
         "output_dir": str(output_dir / "trainer"),
         "learning_rate": float(training_config.get("learning_rate", 5e-5)),
@@ -181,7 +189,7 @@ def _train_model(
         "logging_strategy": "steps",
         "logging_steps": 100,
         "seed": int(config.get("seed", 42)),
-        "fp16": bool(training_config.get("fp16", True)),
+        "fp16": bool(training_config.get("fp16", True)) and cuda_available,
         "report_to": [],
     }
     if memory_guard:
