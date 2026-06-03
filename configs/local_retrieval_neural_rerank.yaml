@@ -8,6 +8,15 @@ semantic_rerank:
   model_name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
   top_k: 10
   semantic_weight: 0.3
+  semantic_weights_by_group:
+    Aka_Gha: 0.3
+    Amh_Eth: 0.3
+    Eng_Eth: 0.5
+    Eng_Gha: 0.5
+    Eng_Ken: 1.0
+    Eng_Uga: 0.4
+    Lug_Uga: 0.05
+    Swa_Ken: 0.0
   encode_batch_size: 128
   tfidf_batch_size: 256
   local_files_only: true

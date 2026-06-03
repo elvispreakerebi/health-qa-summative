@@ -110,7 +110,8 @@ def _predict_with_rerank(
     )
 
     top_k = int(rerank_config.get("top_k", 10))
-    semantic_weight = float(rerank_config.get("semantic_weight", 0.3))
+    default_semantic_weight = float(rerank_config.get("semantic_weight", 0.3))
+    semantic_weights_by_group = rerank_config.get("semantic_weights_by_group", {})
     predictions_by_position: dict[int, dict[str, object]] = {}
     group_col = str(config["retrieval"].get("group_col", "subset"))
     default_config = dict(config["retrieval"]["default"])
@@ -119,6 +120,7 @@ def _predict_with_rerank(
     for group_value, group_queries in query_df.groupby(group_col, sort=False):
         vectorizer_config = dict(default_config)
         vectorizer_config.update(group_configs.get(group_value, {}))
+        semantic_weight = float(semantic_weights_by_group.get(group_value, default_semantic_weight))
         group_positions = group_queries.index.to_numpy()
         bank_matrix, query_matrix = _vectorize(bank_df, group_queries, bank_schema, query_schema, vectorizer_config)
 
