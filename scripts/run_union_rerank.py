@@ -22,9 +22,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run union-candidate neural reranked retrieval")
     parser.add_argument("--config", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--top-k-per-generator", type=int, default=None)
+    parser.add_argument("--max-candidates", type=int, default=None)
     args = parser.parse_args()
 
     config = load_yaml(args.config)
+    if args.top_k_per_generator is not None:
+        config["semantic_rerank"]["top_k_per_generator"] = args.top_k_per_generator
+    if args.max_candidates is not None:
+        config["semantic_rerank"]["max_candidates"] = args.max_candidates
     data_config = data_config_from_mapping(config)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
