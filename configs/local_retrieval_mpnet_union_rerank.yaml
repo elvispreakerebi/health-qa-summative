@@ -1,0 +1,171 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+semantic_rerank:
+  model_name: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+  top_k_per_generator: 12
+  max_candidates: 48
+  semantic_weight: 0.4
+  semantic_weights_by_group:
+    Aka_Gha: 0.5
+    Amh_Eth: 0.2
+    Eng_Eth: 0.4
+    Eng_Gha: 0.6
+    Eng_Ken: 1.0
+    Eng_Uga: 1.0
+    Lug_Uga: 0.1
+    Swa_Ken: 0.5
+  encode_batch_size: 64
+  tfidf_batch_size: 256
+  local_files_only: true
+retrieval:
+  group_col: subset
+  default:
+    analyzer: char
+    ngram_min: 2
+    ngram_max: 4
+    max_features: 100000
+    min_df: 2
+    max_df: 1.0
+    sublinear_tf: true
+    binary: false
+    use_idf: true
+    smooth_idf: true
+    norm: l2
+    lowercase: true
+  group_configs:
+    Aka_Gha:
+      ngram_min: 1
+      ngram_max: 4
+      min_df: 5
+    Amh_Eth:
+      analyzer: char_wb
+      ngram_min: 3
+      ngram_max: 5
+      min_df: 1
+      sublinear_tf: false
+    Eng_Eth:
+      ngram_min: 2
+      ngram_max: 5
+      min_df: 2
+    Eng_Gha:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 5
+    Eng_Ken:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 2
+    Eng_Uga:
+      ngram_min: 1
+      ngram_max: 3
+      min_df: 2
+    Lug_Uga:
+      ngram_min: 1
+      ngram_max: 4
+      min_df: 5
+  candidate_generators:
+    - name: tuned_subset
+      default:
+        analyzer: char
+        ngram_min: 2
+        ngram_max: 4
+        max_features: 100000
+        min_df: 2
+        max_df: 1.0
+        sublinear_tf: true
+        binary: false
+        use_idf: true
+        smooth_idf: true
+        norm: l2
+        lowercase: true
+      group_configs:
+        Aka_Gha:
+          ngram_min: 1
+          ngram_max: 4
+          min_df: 5
+        Amh_Eth:
+          analyzer: char_wb
+          ngram_min: 3
+          ngram_max: 5
+          min_df: 1
+          sublinear_tf: false
+        Eng_Eth:
+          ngram_min: 2
+          ngram_max: 5
+          min_df: 2
+        Eng_Gha:
+          ngram_min: 1
+          ngram_max: 3
+          min_df: 5
+        Eng_Ken:
+          ngram_min: 1
+          ngram_max: 3
+          min_df: 2
+        Eng_Uga:
+          ngram_min: 1
+          ngram_max: 3
+          min_df: 2
+        Lug_Uga:
+          ngram_min: 1
+          ngram_max: 4
+          min_df: 5
+    - name: char_1_3
+      default:
+        analyzer: char
+        ngram_min: 1
+        ngram_max: 3
+        max_features: 100000
+        min_df: 2
+        max_df: 1.0
+        sublinear_tf: true
+        binary: false
+        use_idf: true
+        smooth_idf: true
+        norm: l2
+        lowercase: true
+    - name: char_1_4
+      default:
+        analyzer: char
+        ngram_min: 1
+        ngram_max: 4
+        max_features: 100000
+        min_df: 3
+        max_df: 1.0
+        sublinear_tf: true
+        binary: false
+        use_idf: true
+        smooth_idf: true
+        norm: l2
+        lowercase: true
+    - name: char_2_5
+      default:
+        analyzer: char
+        ngram_min: 2
+        ngram_max: 5
+        max_features: 100000
+        min_df: 2
+        max_df: 1.0
+        sublinear_tf: true
+        binary: false
+        use_idf: true
+        smooth_idf: true
+        norm: l2
+        lowercase: true
+    - name: char_wb_3_5
+      default:
+        analyzer: char_wb
+        ngram_min: 3
+        ngram_max: 5
+        max_features: 100000
+        min_df: 1
+        max_df: 1.0
+        sublinear_tf: false
+        binary: false
+        use_idf: true
+        smooth_idf: true
+        norm: l2
+        lowercase: true
