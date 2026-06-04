@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -26,6 +27,7 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max-tokens", type=int, default=180)
     parser.add_argument("--limit-per-subset", type=int, default=None)
+    parser.add_argument("--mode", choices=["answer", "rewrite"], default="answer")
     args = parser.parse_args()
 
     config = load_yaml(args.config)
@@ -50,6 +52,7 @@ def main() -> None:
         subsets,
         args.temperature,
         args.max_tokens,
+        args.mode,
         limit_per_subset=args.limit_per_subset,
     )
     metrics = score_predictions(
@@ -78,6 +81,7 @@ def main() -> None:
         subsets,
         args.temperature,
         args.max_tokens,
+        args.mode,
         submission_mode=True,
         limit_per_subset=args.limit_per_subset,
     )
@@ -97,6 +101,7 @@ def _blend_split(
     subsets: set[str],
     temperature: float,
     max_tokens: int,
+    mode: str,
     *,
     submission_mode: bool = False,
     limit_per_subset: int | None = None,
@@ -127,8 +132,10 @@ def _blend_split(
             generated[row_id] = _generate_answer(
                 model,
                 str(row[question_col]),
+                fallback,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                mode=mode,
             )
             raw_rows.append({"ID": row_id, "prediction": generated[row_id]})
             _append_raw_generation(raw_generation_path, raw_rows)
@@ -138,12 +145,16 @@ def _blend_split(
     return pd.DataFrame({"ID": merged[id_col], "prediction": outputs})
 
 
-def _generate_answer(model: str, question: str, *, temperature: float, max_tokens: int) -> str:
-    prompt = (
-        "Answer the health question in the same language as the question. "
-        "Be concise, medically relevant, and return only the answer.\n\n"
-        f"Question: {question}\nAnswer:"
-    )
+def _generate_answer(
+    model: str,
+    question: str,
+    draft_answer: str,
+    *,
+    temperature: float,
+    max_tokens: int,
+    mode: str,
+) -> str:
+    prompt = _build_prompt(question, draft_answer, mode)
     payload = json.dumps(
         {
             "model": model,
@@ -158,7 +169,36 @@ def _generate_answer(model: str, question: str, *, temperature: float, max_token
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=240) as response:
-        return str(json.loads(response.read().decode("utf-8")).get("response", "")).strip()
+        return _clean_generation(str(json.loads(response.read().decode("utf-8")).get("response", "")))
+
+
+def _build_prompt(question: str, draft_answer: str, mode: str) -> str:
+    if mode == "answer":
+        return (
+            "Answer the health question in the same language as the question. "
+            "Be concise, medically relevant, and return only the answer.\n\n"
+            f"Question: {question}\nAnswer:"
+        )
+    if mode == "rewrite":
+        return (
+            "Rewrite the draft answer so it directly answers the health question. "
+            "Keep the same language as the question. Preserve useful medical details, "
+            "remove repetition, and return only the final answer with no preface.\n\n"
+            f"Question: {question}\nDraft answer: {draft_answer}\nFinal answer:"
+        )
+    raise ValueError(f"Unsupported generation mode: {mode}")
+
+
+def _clean_generation(text: str) -> str:
+    cleaned = str(text).strip()
+    cleaned = re.sub(r"^Here is[^\n]*:\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^Here's[^\n]*:\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^Final answer:\s*", "", cleaned, flags=re.IGNORECASE)
+    parts = [part.strip() for part in re.split(r"\n\s*\n", cleaned) if part.strip()]
+    if len(parts) > 1 and re.search(r"rewritten|answer|candidate", parts[0], flags=re.IGNORECASE):
+        cleaned = "\n\n".join(parts[1:])
+    cleaned = re.sub(r"\n*I removed\b.*$", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    return cleaned.strip()
 
 
 def _load_raw_generations(path: Path) -> dict[str, str]:
