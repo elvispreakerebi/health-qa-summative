@@ -105,7 +105,7 @@ def _hybrid_predictions(
         if not rule.applies(str(question), str(prediction)):
             outputs.append(str(prediction).strip())
             continue
-        outputs.append(_trim_words(_combine(str(question), str(prediction), rule.mode), rule.max_words))
+        outputs.append(rule.combine(str(question), str(prediction)))
     return pd.DataFrame({"ID": merged[id_col], "prediction": outputs})
 
 
@@ -128,9 +128,9 @@ def _trim_words(text: str, max_words: int | None) -> str:
 
 
 class HybridRule:
-    def __init__(self, mode: str, max_words: int | None, condition: str | None = None) -> None:
+    def __init__(self, mode: str, max_words: str, condition: str | None = None) -> None:
         self.mode = mode
-        self.max_words = max_words
+        self.max_words, self.input_max_words, self.prediction_max_words = _parse_max_words(max_words)
         self.condition = _parse_condition(condition)
 
     def applies(self, question: str, prediction: str) -> bool:
@@ -143,6 +143,13 @@ class HybridRule:
         }[feature]
         return compare(value, threshold)
 
+    def combine(self, question: str, prediction: str) -> str:
+        if self.input_max_words is None and self.prediction_max_words is None:
+            return _trim_words(_combine(question, prediction, self.mode), self.max_words)
+        question_part = _trim_words(question, self.input_max_words)
+        prediction_part = _trim_words(prediction, self.prediction_max_words)
+        return _combine(question_part, prediction_part, self.mode)
+
 
 def _parse_rules(raw: str) -> dict[str, HybridRule]:
     rules: dict[str, HybridRule] = {}
@@ -152,12 +159,20 @@ def _parse_rules(raw: str) -> dict[str, HybridRule]:
             raise ValueError("Each rule must be subset:mode:max_words[:condition]")
         subset, mode, max_words = parts[:3]
         condition = parts[3] if len(parts) == 4 else None
-        rules[subset.strip()] = HybridRule(
-            mode.strip(),
-            None if max_words.strip() == "none" else int(max_words),
-            condition,
-        )
+        rules[subset.strip()] = HybridRule(mode.strip(), max_words.strip(), condition)
     return rules
+
+
+def _parse_max_words(raw: str) -> tuple[int | None, int | None, int | None]:
+    if "+" not in raw:
+        return None if raw == "none" else int(raw), None, None
+    input_cap, prediction_cap = raw.split("+", maxsplit=1)
+    return None, _parse_optional_int(input_cap), _parse_optional_int(prediction_cap)
+
+
+def _parse_optional_int(raw: str) -> int | None:
+    value = raw.strip()
+    return None if value == "none" else int(value)
 
 
 def _parse_condition(raw: str | None):
