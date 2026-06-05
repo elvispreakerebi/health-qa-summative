@@ -37,12 +37,17 @@ def main() -> None:
     parser.add_argument("--ollama-model", default="aya:8b")
     parser.add_argument("--subsets", nargs="+", default=["Aka_Gha", "Amh_Eth"])
     parser.add_argument("--english-subsets", nargs="+", default=["Eng_Gha", "Eng_Eth", "Eng_Ken", "Eng_Uga"])
+    parser.add_argument("--lang-code-overrides", nargs="*", default=[])
     parser.add_argument("--limit-per-subset", type=int)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=160)
     parser.add_argument("--embedding-cache-dir", default="outputs/cache")
+    parser.add_argument("--translate-query", action="store_true")
     parser.add_argument("--local-files-only", action="store_true")
     args = parser.parse_args()
+    for override in args.lang_code_overrides:
+        subset, code = override.split("=", maxsplit=1)
+        LANG_CODES[subset.strip()] = code.strip()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -57,12 +62,22 @@ def main() -> None:
         raise ValueError("English retrieval bank is empty")
 
     val_rows = _target_rows(val_df, args.subsets, args.limit_per_subset)
+    val_retrieval_rows = _with_translated_queries(
+        val_rows,
+        args.model_name,
+        enabled=args.translate_query,
+        batch_size=args.batch_size,
+        max_new_tokens=96,
+        local_files_only=args.local_files_only,
+    )
     val_candidates = _retrieve_english_answers(
         english_bank,
-        val_rows,
+        val_retrieval_rows,
         local_files_only=args.local_files_only,
         cache_dir=Path(args.embedding_cache_dir),
     )
+    if args.translate_query:
+        val_candidates["translated_question"] = val_retrieval_rows["input"].to_numpy()
     val_candidates["prediction"] = _translate_answers(
         val_candidates["english_answer"].tolist(),
         val_candidates["subset"].tolist(),
@@ -84,12 +99,22 @@ def main() -> None:
 
     if args.limit_per_subset is None:
         test_rows = _target_rows(test_df, args.subsets, None)
+        test_retrieval_rows = _with_translated_queries(
+            test_rows,
+            args.model_name,
+            enabled=args.translate_query,
+            batch_size=args.batch_size,
+            max_new_tokens=96,
+            local_files_only=args.local_files_only,
+        )
         test_candidates = _retrieve_english_answers(
             english_bank,
-            test_rows,
+            test_retrieval_rows,
             local_files_only=args.local_files_only,
             cache_dir=Path(args.embedding_cache_dir),
         )
+        if args.translate_query:
+            test_candidates["translated_question"] = test_retrieval_rows["input"].to_numpy()
         test_candidates["prediction"] = _translate_answers(
             test_candidates["english_answer"].tolist(),
             test_candidates["subset"].tolist(),
@@ -122,6 +147,29 @@ def _target_rows(df: pd.DataFrame, subsets: list[str], limit_per_subset: int | N
         .head(limit_per_subset)
         .reset_index(drop=True)
     )
+
+
+def _with_translated_queries(
+    rows: pd.DataFrame,
+    model_name: str,
+    *,
+    enabled: bool,
+    batch_size: int,
+    max_new_tokens: int,
+    local_files_only: bool,
+) -> pd.DataFrame:
+    if not enabled:
+        return rows
+    output = rows.copy()
+    output["input"] = _translate_to_english_nllb(
+        output["input"].fillna("").astype(str).tolist(),
+        output["subset"].astype(str).tolist(),
+        model_name,
+        batch_size=batch_size,
+        max_new_tokens=max_new_tokens,
+        local_files_only=local_files_only,
+    )
+    return output
 
 
 def _retrieve_english_answers(
@@ -215,12 +263,67 @@ def _translate_answers_nllb(
         if target_lang is None:
             raise ValueError(f"No NLLB language code configured for subset {subset}")
         indices = [index for index, item in enumerate(subsets) if item == subset]
+        total_batches = (len(indices) + batch_size - 1) // batch_size
         for start in range(0, len(indices), batch_size):
             batch_indices = indices[start : start + batch_size]
             batch = [answers[index] for index in batch_indices]
+            batch_number = start // batch_size + 1
+            print(
+                f"Translating answers {subset} batch {batch_number}/{total_batches}",
+                flush=True,
+            )
             tokenizer.src_lang = "eng_Latn"
             encoded = tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
             forced_bos_token_id = tokenizer.convert_tokens_to_ids(target_lang)
+            with torch.no_grad():
+                generated = model.generate(
+                    **encoded,
+                    forced_bos_token_id=forced_bos_token_id,
+                    max_new_tokens=max_new_tokens,
+                    num_beams=4,
+                    early_stopping=True,
+                )
+            decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
+            outputs.extend((batch_indices[index], text.strip()) for index, text in enumerate(decoded))
+    return [text for _, text in sorted(outputs, key=lambda item: item[0])]
+
+
+def _translate_to_english_nllb(
+    texts: list[str],
+    subsets: list[str],
+    model_name: str,
+    *,
+    batch_size: int,
+    max_new_tokens: int,
+    local_files_only: bool,
+) -> list[str]:
+    import torch
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=local_files_only)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name, local_files_only=local_files_only)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    model.eval()
+
+    outputs: list[tuple[int, str]] = []
+    for subset in dict.fromkeys(subsets):
+        source_lang = LANG_CODES.get(subset)
+        if source_lang is None:
+            raise ValueError(f"No NLLB language code configured for subset {subset}")
+        indices = [index for index, item in enumerate(subsets) if item == subset]
+        total_batches = (len(indices) + batch_size - 1) // batch_size
+        for start in range(0, len(indices), batch_size):
+            batch_indices = indices[start : start + batch_size]
+            batch = [texts[index] for index in batch_indices]
+            batch_number = start // batch_size + 1
+            print(
+                f"Translating queries {subset} batch {batch_number}/{total_batches}",
+                flush=True,
+            )
+            tokenizer.src_lang = source_lang
+            encoded = tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=256).to(device)
+            forced_bos_token_id = tokenizer.convert_tokens_to_ids("eng_Latn")
             with torch.no_grad():
                 generated = model.generate(
                     **encoded,
