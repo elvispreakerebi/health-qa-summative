@@ -14,6 +14,9 @@ Public probe result:
 
 Do not submit `zindi_probe_akan_broader_eng60_local_0_507306.csv` unless a later experiment gives a specific reason.
 
+No newer local translation experiment has beaten the current public baseline. `aya:8b`
+translation smoke tests were rejected, and the NLLB model download did not complete.
+
 Keep the original current best available as:
 
 - `zindi_submission_conditional_hybrid_plus_0_507600.csv`
