@@ -11,22 +11,22 @@ import numpy as np
 import pandas as pd
 from rouge_score import rouge_scorer
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import GroupKFold
 
 from health_qa.config import data_config_from_mapping, load_yaml
 from health_qa.data import DatasetSchema, infer_schema, load_csv
 from health_qa.metrics import score_predictions
+from health_qa.retrieval import _normalize_text
 from health_qa.submission import build_submission, save_submission
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from scripts.run_union_rerank import (
-    _add_tfidf_candidates,
     _candidate_generators,
     _generator_config,
     _load_or_encode,
     _prefix_texts,
-    _ranked_candidates,
     _vectorize,
 )
 
@@ -151,13 +151,14 @@ def _candidate_frame(
         print(f"Building candidates for {group_value} ({len(group_queries)} rows)", flush=True)
         group_positions = group_queries.index.to_numpy()
         candidate_maps = [dict() for _ in range(len(group_queries))]
-        for generator in generators:
+        for generator_index, generator in enumerate(generators):
             vectorizer_config = _generator_config(generator, group_value)
             bank_matrix, query_matrix = _vectorize(bank_df, group_queries, bank_schema, query_schema, vectorizer_config)
-            _add_tfidf_candidates(
+            _add_tracked_tfidf_candidates(
                 candidate_maps,
                 bank_matrix,
                 query_matrix,
+                generator_index=generator_index,
                 top_k=top_k,
                 batch_size=int(rerank_config.get("tfidf_batch_size", 256)),
             )
@@ -198,18 +199,22 @@ def _group_candidate_frame(
     for row_offset, candidate_map in enumerate(candidate_maps):
         query_position = int(group_positions[row_offset])
         query = group_queries.iloc[row_offset]
-        candidates, tfidf_scores = _ranked_candidates(candidate_map, max_candidates=max_candidates)
+        candidates, candidate_stats = _ranked_tracked_candidates(candidate_map, max_candidates=max_candidates)
+        tfidf_scores = np.asarray([stats["max_score"] for stats in candidate_stats], dtype=np.float32)
         semantic_scores = bank_embeddings[candidates] @ query_embeddings[query_position]
         query_text = str(query[query_schema.question_col])
+        query_tokens = _tokens(query_text)
         query_words = len(query_text.split())
         reference = str(query[query_schema.answer_col]) if include_targets else None
-        for rank, (candidate_position, tfidf_score, semantic_score) in enumerate(
-            zip(candidates, tfidf_scores, semantic_scores, strict=True),
+        for rank, (candidate_position, stats, tfidf_score, semantic_score) in enumerate(
+            zip(candidates, candidate_stats, tfidf_scores, semantic_scores, strict=True),
             start=1,
         ):
             bank_row = bank_df.iloc[int(candidate_position)]
             bank_question = str(bank_row[bank_schema.question_col])
             answer = str(bank_row[bank_schema.answer_col])  # type: ignore[index]
+            bank_question_tokens = _tokens(bank_question)
+            answer_tokens = _tokens(answer)
             bank_words = len(bank_question.split())
             answer_words = len(answer.split())
             row = {
@@ -221,11 +226,18 @@ def _group_candidate_frame(
                 "rank": rank,
                 "tfidf_score": float(tfidf_score),
                 "semantic_score": float(semantic_score),
+                "generator_count": int(stats["count"]),
+                "mean_tfidf_score": float(stats["score_sum"] / max(stats["count"], 1)),
+                "best_generator_index": int(stats["best_generator"]),
                 "query_words": query_words,
                 "bank_question_words": bank_words,
                 "answer_words": answer_words,
                 "question_word_delta": abs(query_words - bank_words),
                 "answer_to_query_ratio": answer_words / max(query_words, 1),
+                "question_token_overlap": _overlap_ratio(query_tokens, bank_question_tokens),
+                "question_token_jaccard": _jaccard(query_tokens, bank_question_tokens),
+                "answer_query_overlap": _overlap_ratio(query_tokens, answer_tokens),
+                "answer_query_jaccard": _jaccard(query_tokens, answer_tokens),
                 "prediction": answer,
             }
             if include_targets:
@@ -286,15 +298,83 @@ def _features(candidates: pd.DataFrame) -> np.ndarray:
         "rank",
         "tfidf_score",
         "semantic_score",
+        "generator_count",
+        "mean_tfidf_score",
+        "best_generator_index",
         "query_words",
         "bank_question_words",
         "answer_words",
         "question_word_delta",
         "answer_to_query_ratio",
+        "question_token_overlap",
+        "question_token_jaccard",
+        "answer_query_overlap",
+        "answer_query_jaccard",
     ]
     features = candidates[columns].astype(float).to_numpy()
     features[:, 1] = 1.0 / features[:, 1]
     return features
+
+
+def _add_tracked_tfidf_candidates(
+    candidate_maps: list[dict[int, dict[str, float]]],
+    bank_matrix,
+    query_matrix,
+    *,
+    generator_index: int,
+    top_k: int,
+    batch_size: int,
+) -> None:
+    for start in range(0, query_matrix.shape[0], batch_size):
+        scores = cosine_similarity(query_matrix[start : start + batch_size], bank_matrix)
+        local_top_k = min(top_k, scores.shape[1])
+        local_candidate_positions = np.argpartition(-scores, kth=local_top_k - 1, axis=1)[:, :local_top_k]
+        for row_offset, local_candidates in enumerate(local_candidate_positions):
+            query_candidates = candidate_maps[start + row_offset]
+            for candidate_position in local_candidates:
+                score = float(scores[row_offset, candidate_position])
+                candidate = query_candidates.setdefault(
+                    int(candidate_position),
+                    {
+                        "max_score": -1.0,
+                        "score_sum": 0.0,
+                        "count": 0.0,
+                        "best_generator": float(generator_index),
+                    },
+                )
+                candidate["score_sum"] += score
+                candidate["count"] += 1.0
+                if score > candidate["max_score"]:
+                    candidate["max_score"] = score
+                    candidate["best_generator"] = float(generator_index)
+
+
+def _ranked_tracked_candidates(
+    candidate_map: dict[int, dict[str, float]],
+    *,
+    max_candidates: int,
+) -> tuple[np.ndarray, list[dict[str, float]]]:
+    ranked = sorted(candidate_map.items(), key=lambda item: item[1]["max_score"], reverse=True)[:max_candidates]
+    candidates = np.asarray([candidate for candidate, _ in ranked], dtype=np.int64)
+    stats = [stats for _, stats in ranked]
+    return candidates, stats
+
+
+def _tokens(text: str) -> set[str]:
+    return {token for token in _normalize_text(text).split() if token}
+
+
+def _overlap_ratio(source: set[str], candidate: set[str]) -> float:
+    if not source:
+        return 0.0
+    return len(source & candidate) / len(source)
+
+
+def _jaccard(left: set[str], right: set[str]) -> float:
+    union = left | right
+    if not union:
+        return 0.0
+    return len(left & right) / len(union)
 
 
 def _write_validation(
