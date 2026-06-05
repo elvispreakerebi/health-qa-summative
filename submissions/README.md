@@ -7,17 +7,29 @@ Current public baseline from `zindi_submission_conditional_hybrid_plus_0_507600.
 
 Next public probe candidates:
 
+- `zindi_probe_reranker_top200_enguga_local_0_513599.csv`
+  - Local validation: `0.513598851`
+  - Change: keeps the public baseline, but uses the top-200 learned candidate reranker only for `Eng_Uga`.
+  - Test rows changed: `741`, all `Eng_Uga`.
+  - Recommended next submission because it improves the safer `Eng_Uga`-only reranker probe without changing more rows.
+
+- `zindi_probe_reranker_top200_enguga_engeth_local_0_514662.csv`
+  - Local validation: `0.514662088`
+  - Change: top-200 learned candidate reranker for `Eng_Uga` and `Eng_Eth`.
+  - Test rows changed: `800` (`741` `Eng_Uga`, `59` `Eng_Eth`).
+  - Submit after the top-200 `Eng_Uga`-only probe only if the public score improves.
+
 - `zindi_probe_reranker_enguga_local_0_512600.csv`
   - Local validation: `0.512599672`
   - Change: keeps the public baseline, but uses the learned candidate reranker only for `Eng_Uga`.
   - Test rows changed: `741`, all `Eng_Uga`.
-  - Recommended next submission because it isolates the main positive CV signal.
+  - Superseded by the top-200 `Eng_Uga`-only probe.
 
 - `zindi_probe_reranker_enguga_engeth_local_0_514348.csv`
   - Local validation: `0.514348454`
   - Change: learned candidate reranker for `Eng_Uga` and `Eng_Eth`.
   - Test rows changed: `800` (`741` `Eng_Uga`, `59` `Eng_Eth`).
-  - Submit after the `Eng_Uga`-only probe only if the public score improves.
+  - Superseded by the top-200 `Eng_Uga+Eng_Eth` probe.
 
 Rejected public probes:
 
