@@ -71,6 +71,36 @@ order. The notebook clones this repo, installs dependencies, mounts Google
 Drive, points the config to the shared dataset folder, and can run either the
 local retrieval pipeline or neural fine-tuning.
 
+### Experimental GPU Fine-Tuning Branch
+
+The `colab-llm-finetune` branch contains the high-risk GPU experiments for
+trying to beat the current public-best score after local retrieval/reranking
+stopped transferring to the public leaderboard.
+
+Use these notebooks in Colab:
+
+- `notebooks/colab_seq2seq_lora_finetune.ipynb` trains a LoRA seq2seq model and
+  saves metrics, predictions, the Zindi submission, and the final adapter/model
+  to Google Drive.
+- `notebooks/colab_predict_saved_model.ipynb` reloads a saved Drive model and
+  regenerates validation/test predictions without retraining.
+
+Recommended first GPU config:
+
+```bash
+configs/colab_afriteva_v2_lora_full.yaml
+```
+
+Fallback GPU config:
+
+```bash
+configs/colab_mt5_base_lora_full.yaml
+```
+
+Treat these as leaderboard probes only. The stable public-best submission
+remains `submissions/zindi_submission_conditional_hybrid_plus_0_507600.csv`
+unless a Colab-generated submission beats `0.602576` publicly.
+
 CPU-friendly reproducibility run:
 
 ```bash

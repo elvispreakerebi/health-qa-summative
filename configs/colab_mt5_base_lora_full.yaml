@@ -1,0 +1,47 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+model:
+  name: google/mt5-base
+  tokenizer_use_fast: false
+  max_source_length: 224
+  max_target_length: 192
+  safe_max_source_length: 224
+  safe_max_target_length: 192
+  prompt:
+    template: "Answer the health question in the same language as the question.\nsubset: {subset}\nquestion: {question}\nanswer:"
+training:
+  learning_rate: 0.00003
+  epochs: 3
+  batch_size: 1
+  eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: true
+  model_gradient_checkpointing: true
+  auto_find_batch_size: true
+  memory_guard: false
+  fp16: true
+  save_total_limit: 2
+  load_best_model_at_end: true
+  metric_for_best_model: eval_loss
+  greater_is_better: false
+  eval_accumulation_steps: 8
+  dataloader_pin_memory: true
+  lora:
+    enabled: true
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules:
+      - q
+      - v
+inference:
+  batch_size: 4
+  safe_batch_size: 2
+  num_beams: 4
+  no_repeat_ngram_size: 3
+  length_penalty: 1.0
+  early_stopping: true
