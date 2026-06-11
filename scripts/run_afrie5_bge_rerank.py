@@ -25,11 +25,23 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-val-rows", type=int, default=None)
     parser.add_argument("--max-bank-rows", type=int, default=None)
+    parser.add_argument("--dense-top-k", type=int, default=None)
+    parser.add_argument("--tfidf-top-k", type=int, default=None)
+    parser.add_argument("--max-candidates", type=int, default=None)
+    parser.add_argument("--cross-encoder-top-k", type=int, default=None)
     parser.add_argument("--skip-test", action="store_true")
     parser.add_argument("--no-cross-encoder", action="store_true")
     args = parser.parse_args()
 
     config = load_yaml(args.config)
+    if args.dense_top_k is not None:
+        config.setdefault("retrieval", {})["dense_top_k"] = args.dense_top_k
+    if args.tfidf_top_k is not None:
+        config.setdefault("retrieval", {})["tfidf_top_k"] = args.tfidf_top_k
+    if args.max_candidates is not None:
+        config.setdefault("retrieval", {})["max_candidates"] = args.max_candidates
+    if args.cross_encoder_top_k is not None:
+        config.setdefault("cross_encoder", {})["top_k"] = args.cross_encoder_top_k
     if args.no_cross_encoder:
         config.setdefault("cross_encoder", {})["enabled"] = False
 
