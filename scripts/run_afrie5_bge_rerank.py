@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-val-rows", type=int, default=None)
+    parser.add_argument("--max-bank-rows", type=int, default=None)
     parser.add_argument("--skip-test", action="store_true")
     parser.add_argument("--no-cross-encoder", action="store_true")
     args = parser.parse_args()
@@ -41,6 +42,13 @@ def main() -> None:
     test_df = load_csv(data_config.test_path).reset_index(drop=True)
     if args.max_val_rows:
         val_df = val_df.head(args.max_val_rows).copy()
+    if args.max_bank_rows:
+        train_df = _stratified_limit(
+            train_df,
+            group_col=str(config.get("retrieval", {}).get("group_col", "subset")),
+            max_rows=args.max_bank_rows,
+            seed=int(config.get("seed", 42)),
+        )
 
     train_schema = infer_schema(train_df, require_answer=True)
     val_schema = infer_schema(val_df, require_answer=True)
@@ -339,6 +347,29 @@ def _candidate_bank(
     if candidate_scope == "same_group":
         return bank_df[bank_df[group_col] == group_value]
     raise ValueError(f"Unsupported candidate_scope: {candidate_scope}")
+
+
+def _stratified_limit(
+    df: pd.DataFrame,
+    *,
+    group_col: str,
+    max_rows: int,
+    seed: int,
+) -> pd.DataFrame:
+    if max_rows >= len(df):
+        return df.reset_index(drop=True)
+    if group_col not in df:
+        return df.sample(n=max_rows, random_state=seed).sort_index().reset_index(drop=True)
+    groups = list(df.groupby(group_col, sort=False))
+    per_group = max(1, int(np.ceil(max_rows / max(len(groups), 1))))
+    sampled = [
+        group.sample(n=min(per_group, len(group)), random_state=seed)
+        for _, group in groups
+    ]
+    output = pd.concat(sampled).sort_index()
+    if len(output) > max_rows:
+        output = output.sample(n=max_rows, random_state=seed).sort_index()
+    return output.reset_index(drop=True)
 
 
 def _vectorize(

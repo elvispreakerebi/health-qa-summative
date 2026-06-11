@@ -4,6 +4,7 @@ import pandas as pd
 from health_qa.data import DatasetSchema
 from scripts.run_afrie5_bge_rerank import (
     _candidate_scores,
+    _stratified_limit,
     format_document,
     format_query,
 )
@@ -45,3 +46,17 @@ def test_candidate_scores_unions_dense_and_tfidf_candidates():
     positions = {candidate["candidate_position"] for candidate in candidates}
     assert positions == {10, 11, 12}
     assert candidates[0]["candidate_position"] == 10
+
+
+def test_stratified_limit_keeps_multiple_groups():
+    df = pd.DataFrame(
+        {
+            "subset": ["a"] * 5 + ["b"] * 5 + ["c"] * 5,
+            "input": [f"q{i}" for i in range(15)],
+        }
+    )
+
+    limited = _stratified_limit(df, group_col="subset", max_rows=6, seed=42)
+
+    assert len(limited) == 6
+    assert set(limited["subset"]) == {"a", "b", "c"}
