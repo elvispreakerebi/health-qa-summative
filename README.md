@@ -100,6 +100,23 @@ Full local CPU runs are slow because AfriE5 and BGE are large models. Use
 local score. Do not submit this path unless it beats the current stable
 validation baseline and manual samples look like real answers.
 
+## LLM-Gated Candidate Blending
+
+Use `scripts/llm_gate_candidates.py` to compare a stable baseline against a
+risky candidate file with a local Ollama model. The gate fails closed to the
+baseline unless the judge clearly prefers the candidate, which is useful for
+probes that improve validation but collapse on the public leaderboard.
+
+```bash
+python scripts/llm_gate_candidates.py \
+  --config configs/local_retrieval_mpnet_union_rerank.yaml \
+  --base-dir outputs/local_retrieval_mpnet_e5_union_xxwide_hybrid_conditional_plus \
+  --candidate-dir outputs/candidate_reranker_top200_features_v1 \
+  --output-dir outputs/llm_gate_llama32_top200_features \
+  --model llama3.2:3b \
+  --subsets Eng_Uga,Eng_Eth
+```
+
 ## Colab Workflow
 
 Open `notebooks/health_qa_summative_colab.ipynb` in Colab and run the cells in
