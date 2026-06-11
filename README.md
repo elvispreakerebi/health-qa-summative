@@ -64,6 +64,42 @@ outputs/local_retrieval/submission.csv
 This is the default debugging and iteration surface. Use it to validate data,
 submission format, metrics, and experiment tracking before spending Colab time.
 
+### AfriE5 + BGE Retrieval Reranking
+
+The local `local-afrie5-bge-rerank` branch adds a stronger retrieval experiment
+that uses `McGill-NLP/AfriE5-Large-instruct` for dense African-language
+retrieval and optionally reranks candidates with `BAAI/bge-reranker-v2-m3`.
+This is a research path, not the current final submission.
+
+Quick CPU smoke test:
+
+```bash
+python scripts/run_afrie5_bge_rerank.py \
+  --config configs/local_afrie5_bge_rerank.yaml \
+  --output-dir outputs/afrie5_smoke \
+  --max-val-rows 20 \
+  --max-bank-rows 800 \
+  --skip-test \
+  --no-cross-encoder
+```
+
+Small BGE rerank test:
+
+```bash
+python scripts/run_afrie5_bge_rerank.py \
+  --config configs/local_afrie5_bge_rerank.yaml \
+  --output-dir outputs/afrie5_bge_smoke \
+  --max-val-rows 100 \
+  --max-bank-rows 1600 \
+  --skip-test \
+  --cross-encoder-top-k 5
+```
+
+Full local CPU runs are slow because AfriE5 and BGE are large models. Use
+`--skip-test` until validation is meaningfully above the stable public-best
+local score. Do not submit this path unless it beats the current stable
+validation baseline and manual samples look like real answers.
+
 ## Colab Workflow
 
 Open `notebooks/health_qa_summative_colab.ipynb` in Colab and run the cells in
