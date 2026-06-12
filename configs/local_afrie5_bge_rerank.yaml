@@ -1,0 +1,42 @@
+seed: 42
+data:
+  raw_dir: data/raw
+  train_file: Train.csv
+  val_file: Val.csv
+  test_file: Test.csv
+embedding:
+  model_name: McGill-NLP/AfriE5-Large-instruct
+  query_prefix: "Instruct: Retrieve health question-answer pairs that are semantically consistent with the input.\nQuery: "
+  document_template: "Question: {question}\nAnswer: {answer}"
+  encode_batch_size: 32
+  local_files_only: false
+retrieval:
+  group_col: subset
+  candidate_scope: same_group
+  dense_top_k: 80
+  tfidf_top_k: 40
+  max_candidates: 120
+  dense_weight: 1.0
+  tfidf_weight: 0.15
+  similarity_batch_size: 64
+  tfidf:
+    analyzer: char
+    ngram_min: 2
+    ngram_max: 5
+    max_features: 150000
+    min_df: 2
+    max_df: 1.0
+    sublinear_tf: true
+    binary: false
+    use_idf: true
+    smooth_idf: true
+    norm: l2
+    lowercase: true
+cross_encoder:
+  enabled: true
+  model_name: BAAI/bge-reranker-v2-m3
+  top_k: 40
+  batch_size: 8
+  max_length: 512
+  document_template: "Question: {question}\nAnswer: {answer}"
+  local_files_only: false
