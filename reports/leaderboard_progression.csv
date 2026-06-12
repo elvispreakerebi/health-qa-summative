@@ -1,3 +1,6 @@
 date,submission_file,public_score,rank,screenshot,notes
 2026-06-05,submissions/zindi_submission_conditional_hybrid_plus_0_507600.csv,0.602576,96,Screenshot 2026-06-05 at 10.21.01 am.png,First official Zindi submission; local validation 0.507600 translated to stronger public score than expected
 2026-06-05,submissions/zindi_probe_akan_broader_eng80_local_0_507316.csv,0.601786,,Screenshot 2026-06-05 at 10.41.58 am.png,Broader Akan and English Ghana probe scored below the current public baseline; do not submit the companion Eng60 probe unless a later strategy changes
+2026-06-05,submissions/zindi_probe_nllb_hybrid_local_0_508261.csv,0.600599,,Screenshot 2026-06-05 at 8.48.53 pm.png,NLLB-assisted hybrid had the best local score at the time but slightly worse public score than the first submission
+2026-06-06,submissions/zindi_probe_reranker_top200_features_enguga_engeth_local_0_517935.csv,0.421688,,Screenshot 2026-06-06 at 9.56.07 am.png,Feature reranker overfit local validation and collapsed on public leaderboard
+2026-06-12,submissions/zindi_probe_llm_gate_llama32_top200_features_local_0_514824.csv,0.582714,,Screenshot 2026-06-12 at 10.26.56 am.png,LLM-gated probe recovered from reranker collapse but still underperformed the first public submission
